@@ -4,8 +4,8 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 
 #Initialise dynamodb resource
-dynamodb = boto3.resource('dynamodb', region_name = os.getenv('AWS_DEFAULT_REGION', 'eu-north-1'))
-table = dynamodb.Table('payments')
+dynamodb = boto3.resource('dynamodb', region_name='ap-south-1')
+table = dynamodb.Table(os.getenv('DYNAMODB_TABLE_NAME', 'payments'))    
 
 def get_payment_by_id(payment_id: str):
     "Fetch payment by primary key"
