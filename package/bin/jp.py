@@ -1,4 +1,4 @@
-#!/workspaces/aws-reconciliation-engine/venv/bin/python3
+#!/workspaces/aws-reconciliation-engine/.venv310/bin/python3.10
 
 import sys
 import json

@@ -3,9 +3,6 @@ import os
 from datetime import datetime
 from botocore.exceptions import ClientError
 
-print(f"DEBUG: Initializing DynamoDB in region: ap-south-1")
-print(f"DEBUG: Table name: {os.getenv('DYNAMODB_TABLE_NAME', 'payments')}")
-
 #Initialise dynamodb resource
 dynamodb = boto3.resource('dynamodb', region_name='ap-south-1')
 table = dynamodb.Table(os.getenv('DYNAMODB_TABLE_NAME', 'payments'))    
