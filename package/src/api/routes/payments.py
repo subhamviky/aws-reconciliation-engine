@@ -93,3 +93,26 @@ def reconcile(payment_id:str):
     )
 
     return{"payment_id" : payment_id, "status" : "RECONCILED" }
+
+from src.agents.payment_agent import app as payment_agent_app
+
+class QueryRequest(BaseModel):
+    question:str
+
+@router.post("/query")
+def query_payments(request: QueryRequest):
+    "Natural Language"
+    trace_id = generate_trace_id()
+    log_event(logger, "agent_query_received", trace_id,
+                question=request.question)
+    result = payment_agent_app.invoke({
+        "query": request.question,
+        "intent": "",
+        "rag_context": "",
+        "tool_result": "",
+        "final_response": "",
+        "trace_id": trace_id
+    })
+    log_event(logger, "agent_query_complete", trace_id,
+                intent = result.get("intent") )
+    return {"answer" : result["final_response"], "trace_id": trace_id}
