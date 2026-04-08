@@ -1,5 +1,13 @@
-from fastapi import FastAPI
+import logging
+import uuid
+from fastapi import FastAPI, Request
 from src.api.routes import payments
+
+logging.basicConfig(
+    level=logging.INFO,
+    format= '%(asctime)s %(levelname)s %(name)s trace_id=%(trace_id)s %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Payment Reconciliation Engine",
@@ -7,6 +15,16 @@ app = FastAPI(
     version="0.1.0",
     redirect_slashes=False
 )
+
+@app.middleware("http")
+async def add_trace_id(request: Request, call_next):
+    trace_id = str(uuid.uuid4())[:8]
+    request.state.trace_id = trace_id
+    import logging_context
+    logging_context.trace_id = trace_id
+    response = await call_next(request)
+    response.headers["X-Trace=ID"] = trace_id
+    return response
 
 app.include_router(payments.router, prefix="/payments", tags=["payments"])
 

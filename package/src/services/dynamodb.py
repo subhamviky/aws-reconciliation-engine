@@ -1,7 +1,10 @@
+from src.utils.logger import get_logger, log_event
 import boto3
 import os
 from datetime import datetime
 from botocore.exceptions import ClientError
+
+logger = get_logger(__name__)
 
 #Initialise dynamodb resource
 dynamodb = boto3.resource('dynamodb', region_name='ap-south-1')
@@ -37,9 +40,13 @@ def save_payment(payment: dict):
             Item = payment,
             ConditionExpression = 'attribute_not_exists(payment_id)'
         )
+        log_event(logger, "payment saved", payment.get("payment_id", "unknown"),
+                payment_id = payment.get("payment_id"))
         return payment
     except ClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            log_event(logger, "idempotency_check_passed", "system",
+                    payment_id = payment.get("payment_id"))
             #Payment already exists - return existing record
             return get_payment_by_id( payment['payment_id'])
         raise

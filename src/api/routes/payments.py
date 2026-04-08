@@ -1,3 +1,4 @@
+from src.utils.logger import get_logger, log_event, generate_trace_id
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
@@ -9,6 +10,8 @@ from src.services.dynamodb import(
     get_payment_by_id,
     get_payment_by_reference
 )
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 SQS_QUEUE_URL = "https://sqs.ap-south-1.amazonaws.com/494899930475/payments-queue"
@@ -30,9 +33,18 @@ class PaymentResponse(BaseModel):
 
 @router.post("/", response_model = PaymentResponse)
 def create_payment(payment: PaymentRequest):
+    trace_id = generate_trace_id()
+
+    log_event(logger, "payment received", trace_id,
+                vendor_id=payment.vendor_id,
+                reference_id=payment.reference_id,
+                amount = str(payment.amount))
+
     "Submit payment for reconciliation"
     existing = get_payment_by_reference(payment.reference_id)
     if existing:
+        log_event(logger, "duplicate_payment_blocked", trace_id,
+                    reference_id = payment.reference_id)
         return PaymentResponse(**existing)
     new_payment = {
         'payment_id' : str(uuid.uuid4()),
@@ -50,6 +62,10 @@ def create_payment(payment: PaymentRequest):
         QueueUrl=SQS_QUEUE_URL,
         MessageBody=json.dumps(new_payment)
     )
+
+    log_event(logger, "payment_queued", trace_id,
+                payment_id=new_payment["payment_id"],
+                status = "PENDING")
     return PaymentResponse(**saved)
 
 @router.get("/{payment_id}", response_model = PaymentResponse)
