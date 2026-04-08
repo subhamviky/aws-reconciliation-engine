@@ -1,0 +1,10 @@
+boto3==1.42.42
+fastapi==0.115.0
+mangum==0.17.0
+langchain==0.2.12
+langchain-core==0.2.27
+langchain-community==0.2.11
+langchain-aws==1.4.1
+langchain-chroma==1.1.0
+langgraph==0.0.30
+chromadb==0.5.0

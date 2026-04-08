@@ -1,32 +1,21 @@
+from __future__ import annotations
+
+import asyncio
 import logging
-from itertools import chain
 from contextlib import ExitStack
-from typing import List, Optional, Type
+from itertools import chain
+from typing import Any
 
-from mangum.protocols import HTTPCycle, LifespanCycle
-from mangum.handlers import ALB, HTTPGateway, APIGateway, LambdaAtEdge
 from mangum.exceptions import ConfigurationError
-from mangum.types import (
-    ASGI,
-    LifespanMode,
-    LambdaConfig,
-    LambdaEvent,
-    LambdaContext,
-    LambdaHandler,
-)
-
+from mangum.handlers import ALB, APIGateway, HTTPGateway, LambdaAtEdge
+from mangum.protocols import HTTPCycle, LifespanCycle
+from mangum.types import ASGI, LambdaConfig, LambdaContext, LambdaEvent, LambdaHandler, LifespanMode
 
 logger = logging.getLogger("mangum")
 
+HANDLERS: list[type[LambdaHandler]] = [ALB, HTTPGateway, APIGateway, LambdaAtEdge]
 
-HANDLERS: List[Type[LambdaHandler]] = [
-    ALB,
-    HTTPGateway,
-    APIGateway,
-    LambdaAtEdge,
-]
-
-DEFAULT_TEXT_MIME_TYPES: List[str] = [
+DEFAULT_TEXT_MIME_TYPES: list[str] = [
     "text/",
     "application/json",
     "application/javascript",
@@ -42,14 +31,12 @@ class Mangum:
         app: ASGI,
         lifespan: LifespanMode = "auto",
         api_gateway_base_path: str = "/",
-        custom_handlers: Optional[List[Type[LambdaHandler]]] = None,
-        text_mime_types: Optional[List[str]] = None,
-        exclude_headers: Optional[List[str]] = None,
+        custom_handlers: list[type[LambdaHandler]] | None = None,
+        text_mime_types: list[str] | None = None,
+        exclude_headers: list[str] | None = None,
     ) -> None:
         if lifespan not in ("auto", "on", "off"):
-            raise ConfigurationError(
-                "Invalid argument supplied for `lifespan`. Choices are: auto|on|off"
-            )
+            raise ConfigurationError("Invalid argument supplied for `lifespan`. Choices are: auto|on|off")
 
         self.app = app
         self.lifespan = lifespan
@@ -60,6 +47,7 @@ class Mangum:
             text_mime_types=text_mime_types or [*DEFAULT_TEXT_MIME_TYPES],
             exclude_headers=[header.lower() for header in exclude_headers],
         )
+        self._setup_event_loop()
 
     def infer(self, event: LambdaEvent, context: LambdaContext) -> LambdaHandler:
         for handler_cls in chain(self.custom_handlers, HANDLERS):
@@ -72,14 +60,23 @@ class Mangum:
             "supported handler.)"
         )
 
-    def __call__(self, event: LambdaEvent, context: LambdaContext) -> dict:
+    def _setup_event_loop(self) -> None:
+        try:
+            asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+    def __call__(self, event: LambdaEvent, context: LambdaContext) -> dict[str, Any]:
         handler = self.infer(event, context)
+        scope = handler.scope
         with ExitStack() as stack:
             if self.lifespan in ("auto", "on"):
                 lifespan_cycle = LifespanCycle(self.app, self.lifespan)
                 stack.enter_context(lifespan_cycle)
+                scope.update({"state": lifespan_cycle.lifespan_state.copy()})
 
-            http_cycle = HTTPCycle(handler.scope, handler.body)
+            http_cycle = HTTPCycle(scope, handler.body)
             http_response = http_cycle(self.app)
 
             return handler(http_response)

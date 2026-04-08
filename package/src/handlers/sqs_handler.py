@@ -9,12 +9,18 @@ def process_payment_record(record):
     body = json.loads(record["body"])
     payment_id = body.get("payment_id")
 
-    table.update_item(
-        Key={"payment_id": payment_id},
-        UpdateExpression="SET #status = :val",
-        ExpressionAttributeNames={"#status": "status"},
-        ExpressionAttributeValues={":val": "RECONCILED"}
-    )
+    try:
+        response = table.update_item(
+            Key={"payment_id": payment_id},
+            UpdateExpression="SET #status = :val",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={":val": "RECONCILED"},
+            ReturnValues="ALL_NEW"
+        )
+        print(f"Updated item: {response}")
+    except Exception as e:
+        print(f"Error updating item {payment_id}: {e}")
+        raise
 
 def handler(event, context):
     for record in event["Records"]:

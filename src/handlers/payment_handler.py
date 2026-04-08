@@ -1,4 +1,4 @@
 from mangum import Mangum
 from src.api.main import app
 
-handler = Mangum(app, lifespan="off")
+handler = Mangum(app, lifespan ="off")

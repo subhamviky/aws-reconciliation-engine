@@ -13,3 +13,8 @@ app.include_router(payments.router, prefix="/payments", tags=["payments"])
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "reconciliation-engine"}
+
+from src.pipeline.rag_pipeline import run_pipeline
+
+if __name__ == "__main__":
+    run_pipeline()
