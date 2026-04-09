@@ -1,0 +1,18 @@
+{
+  "name": "Terraform Dev Container",
+  "dockerFile": "Dockerfile",
+  "context": ".",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.formatOnSave": true,
+        "python.formatting.provider": "black"
+      },
+      "extensions": [
+        "hashicorp.terraform",
+        "ms-python.python"
+      ]
+    }
+  },
+  "postCreateCommand": "terraform --version"
+}
