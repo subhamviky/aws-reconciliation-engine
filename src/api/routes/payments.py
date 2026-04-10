@@ -69,7 +69,7 @@ def create_payment(payment: PaymentRequest):
     return PaymentResponse(**saved)
 
 @router.get("/{payment_id}", response_model = PaymentResponse)
-def get_payment(payment_id:str):
+async def get_payment(payment_id:str):
     "Retrieve payment by id"
     payment = get_payment_by_id(payment_id)
     if not payment:

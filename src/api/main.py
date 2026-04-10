@@ -1,7 +1,8 @@
 import logging
 import uuid
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from src.api.routes import payments
+import logging
 
 logging.basicConfig(
     level=logging.INFO,
