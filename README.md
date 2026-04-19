@@ -52,7 +52,8 @@ Natural language query
        ├── REF-xxx query  ──► DynamoDB tool call
        └── Open question  ──► Bedrock RAG (Titan embeddings + ChromaDB)
 ```
-
+> Implements E2A two-layer idempotency pattern and DLQ governance.
+> [E2A Framework](https://github.com/subhamviky/e2a-framework)
 ---
 
 ## Key Engineering Decisions
