@@ -52,7 +52,8 @@ Natural language query
        ├── REF-xxx query  ──► DynamoDB tool call
        └── Open question  ──► Bedrock RAG (Titan embeddings + ChromaDB)
 ```
-
+> Implements E2A two-layer idempotency pattern and DLQ governance.
+> [E2A Framework](https://github.com/subhamviky/e2a-framework)
 ---
 
 ## Key Engineering Decisions
@@ -66,6 +67,12 @@ Natural language query
 | **Correlation ID threading** | Every log line carries request ID | Full distributed traceability across Lambda invocations |
 | **Agent routing** | LangGraph routes by query type: lookup vs. open question | Avoids RAG overhead for direct reference lookups |
 
+## Architectural Mental Model
+
+The same patterns proven at $350M SAP TM financial settlement scale
+translate directly to cloud-native and AI-native systems.
+
+![SAP RAP to Python Agentic Stack mental model](docs/images/sap-to-agentic-mental-model.svg)
 ---
 
 ## AWS Services
