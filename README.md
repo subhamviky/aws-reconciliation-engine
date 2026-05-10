@@ -172,6 +172,6 @@ MCP-style tool microservices, and full Terraform IaC. Phase 2 in progress.
 
 ## Author
 
-**Subham Gupta** — Staff Architect & AI Architect, SAP Labs India
+**Subham Gupta** — Staff Architect & AI Architect
 
 [LinkedIn](https://www.linkedin.com/in/subham-gupta-0a05a058) · [Email](mailto:subhamviky@gmail.com)
