@@ -13,7 +13,7 @@
 
 ## 🔄 Architectural Evolution Path
 
-> **Status: Phase 1 (Live on AWS) | Phase 2 (In Process)**
+> **Status: Phase 2 (In Process)**
 
 This repository operates under an intentional **"Spike-and-Stabilize"** engineering pattern, serving as the serverless performance spike validating the low-latency and auto-scaling boundaries of the [E2A Architecture Framework](https://github.com/subhamviky/e2a-framework).
 * **Phase 1 (Live):** Validated horizontal auto-scaling, asynchronous event ingestion, and stateless database-level conditional locking on ephemeral cloud compute nodes.
