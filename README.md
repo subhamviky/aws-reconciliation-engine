@@ -1,25 +1,31 @@
 # Cloud-Native Payment Reconciliation Engine
 
-> Production-grade payment reconciliation system built on AWS — directly mirroring
-> $350M SAP TM financial settlement architecture on cloud-native infrastructure.
+> Production-grade payment reconciliation system built on AWS — directly mirroring $350M SAP TM financial settlement architecture on cloud-native infrastructure.
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)
 ![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-FastAPI-FF9900?style=flat&logo=awslambda&logoColor=white)
 ![DynamoDB](https://img.shields.io/badge/DynamoDB-Idempotency-4053D6?style=flat&logo=amazondynamodb&logoColor=white)
 ![SQS](https://img.shields.io/badge/SQS_+_DLQ-Async-FF9900?style=flat&logo=amazonaws&logoColor=white)
 ![Phase 1](https://img.shields.io/badge/Phase_1-Live_on_AWS_(ap--south--1)-brightgreen?style=flat)
-![Phase 2](https://img.shields.io/badge/Phase_2-LangGraph_+_Bedrock_RAG_(Q2_2026)-blue?style=flat)
+![Phase 2](https://img.shields.io/badge/Phase_2-LangGraph_+_Bedrock_RAG_(In_Process)-blue?style=flat)
+
+---
+
+## 🔄 Architectural Evolution Path
+
+> **Status: Phase 2 (In Process)**
+
+This repository operates under an intentional **"Spike-and-Stabilize"** engineering pattern, serving as the serverless performance spike validating the low-latency and auto-scaling boundaries of the [E2A Architecture Framework](https://github.com/subhamviky/e2a-framework).
+* **Phase 1 (Live):** Validated horizontal auto-scaling, asynchronous event ingestion, and stateless database-level conditional locking on ephemeral cloud compute nodes.
+* **Phase 2 (Active):** Decoupling the procedural reconciliation rule handlers out of standard compute execution logic and transforming them into modular, E2A-compliant tool execution blocks for multi-agent auditing loops.
 
 ---
 
 ## What This Is
 
-A payment reconciliation engine built to prove that enterprise financial settlement patterns
-translate directly to cloud-native infrastructure — without losing the integrity guarantees
-required for $350M+ in financial volumes.
+A payment reconciliation engine built to prove that enterprise financial settlement patterns translate directly to cloud-native infrastructure — without losing the integrity guarantees required for $350M+ in financial volumes.
 
-**Phase 1 is live on AWS (ap-south-1).** Phase 2 adds a LangGraph multi-agent layer with
-Amazon Bedrock RAG for natural language querying of financial audit logs.
+**Phase 1 is live on AWS (ap-south-1).** Phase 2 adds an agentic orchestration layer with Amazon Bedrock RAG for natural language querying of financial audit logs.
 
 ---
 
@@ -59,39 +65,40 @@ Natural language query
 ## Key Engineering Decisions
 
 | Decision | Implementation | Why |
-|----------|---------------|-----|
-| **Two-layer idempotency** | Application-level GSI query + DB-level conditional expression | Exactly-once write guarantee — same pattern as $350M settlement engine |
-| **Async processing** | POST returns PENDING immediately; SQS consumer reconciles async | Decouples ingestion from processing; handles backpressure |
-| **DLQ escalation** | Failed messages → DLQ after 3 retries + CloudWatch alarm | Zero silent drops; every failure is surfaced |
-| **Exponential backoff** | Lambda retry policy with jitter | Prevents thundering herd on downstream services |
-| **Correlation ID threading** | Every log line carries request ID | Full distributed traceability across Lambda invocations |
-| **Agent routing** | LangGraph routes by query type: lookup vs. open question | Avoids RAG overhead for direct reference lookups |
+| :--- | :--- | :--- |
+| **Two-layer idempotency** | Application-level GSI query + DB-level conditional expression | Exactly-once write guarantee — same pattern as $350M settlement engine mapping to the enterprise Line-Element Key (`REF_ELEM_KEY`). |
+| **Async processing** | POST returns PENDING immediately; SQS consumer reconciles async | Decouples ingestion from processing; handles backpressure. Reflects the re-architecting of synchronous settlement flows to low-friction async pipelines. |
+| **DLQ escalation** | Failed messages → DLQ after 3 retries + CloudWatch alarm | Zero silent drops; every failure is surfaced to protect error budgets. |
+| **Exponential backoff** | Lambda retry policy with jitter | Prevents thundering herd on downstream services. |
+| **Correlation ID threading** | Every log line carries request ID | Full distributed traceability across Lambda invocations via standard OTel/X-Ray patterns. |
+| **Agent routing** | LangGraph routes by query type: lookup vs. open question | Avoids RAG overhead for direct reference lookups to optimize FinOps margin constraints. |
+
+---
 
 ## Architectural Mental Model
 
-The same patterns proven at $350M SAP TM financial settlement scale
-translate directly to cloud-native and AI-native systems.
+The same patterns proven at $350M SAP TM financial settlement scale translate directly to cloud-native and AI-native systems.
 
 ![SAP RAP to Python Agentic Stack mental model](docs/images/sap-to-agentic-mental-model.svg)
+
 ---
 
 ## AWS Services
 
 | Service | Purpose |
-|---------|---------|
-| Lambda + Mangum | Serverless FastAPI deployment |
-| API Gateway | HTTP API with rate limiting |
-| DynamoDB | Payments table, PAY\_PER\_REQUEST billing, GSI for idempotency |
-| SQS + DLQ | Async payment processing with failure escalation |
-| CloudWatch | Structured logging with correlation ID threading |
-| Amazon Bedrock | Titan embeddings for Phase 2 RAG pipeline |
+| :--- | :--- |
+| **Lambda + Mangum** | Serverless FastAPI deployment |
+| **API Gateway** | HTTP API with rate limiting |
+| **DynamoDB** | Payments table, PAY_PER_REQUEST billing, GSI for idempotency |
+| **SQS + DLQ** | Async payment processing with failure escalation |
+| **CloudWatch** | Structured logging with correlation ID threading |
+| **Amazon Bedrock** | Titan embeddings for Phase 2 RAG pipeline |
 
 ---
 
 ## Phase Status
 
-### Phase 1 — Complete (Live on AWS ap-south-1)
-
+### Phase 1 — Complete
 - [x] FastAPI service layer on Lambda via Mangum
 - [x] Async event processing: POST → SQS → Lambda Consumer → RECONCILED
 - [x] Two-layer DynamoDB idempotency pattern
@@ -99,8 +106,7 @@ translate directly to cloud-native and AI-native systems.
 - [x] CloudWatch structured logging with correlation ID threading
 - [x] Terraform IaC for Lambda, API Gateway, DynamoDB, SQS
 
-### Phase 2 — Targeted Q2 2026
-
+### Phase 2 — In Process
 - [ ] LangGraph multi-agent workflow
 - [ ] Amazon Bedrock RAG — natural language querying of financial audit logs
 - [ ] Bedrock Titan embeddings replacing local ChromaDB
@@ -112,7 +118,7 @@ translate directly to cloud-native and AI-native systems.
 
 ```bash
 # Clone and set up
-git clone https://github.com/subhamviky/aws-reconciliation-engine.git
+git clone [https://github.com/subhamviky/aws-reconciliation-engine.git](https://github.com/subhamviky/aws-reconciliation-engine.git)
 cd aws-reconciliation-engine
 
 python -m venv venv
@@ -124,7 +130,6 @@ uvicorn src.api.main:app --reload
 
 # Swagger UI available at:
 # http://localhost:8000/docs
-```
 
 ---
 
@@ -172,6 +177,6 @@ MCP-style tool microservices, and full Terraform IaC. Phase 2 in progress.
 
 ## Author
 
-**Subham Gupta** — Staff Architect & AI Architect, SAP Labs India
+**Subham Gupta** — Staff Architect & AI Architect
 
 [LinkedIn](https://www.linkedin.com/in/subham-gupta-0a05a058) · [Email](mailto:subhamviky@gmail.com)
