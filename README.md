@@ -23,9 +23,25 @@ This repository operates under an intentional **"Spike-and-Stabilize"** engineer
 
 ## What This Is
 
-A payment reconciliation engine built to prove that enterprise financial settlement patterns translate directly to cloud-native infrastructure — without losing the integrity guarantees required for $350M+ in financial volumes.
+> **E2A Serverless Reference Spike** — Phase 1 live on AWS ap-south-1
 
-**Phase 1 is live on AWS (ap-south-1).** Phase 2 adds an agentic orchestration layer with Amazon Bedrock RAG for natural language querying of financial audit logs.
+This is the serverless architectural spike for the
+[E2A Architecture Framework](https://github.com/subhamviky/e2a-framework),
+proving that the same two-layer idempotency, LangGraph multi-agent RAG, and
+event-hardening patterns governing $350M+ SAP TM financial settlement apply
+directly to Python serverless architecture on AWS.
+
+**What this spike validates:**
+- E2A two-layer idempotency: application-level GSI query + DynamoDB conditional
+  expression for exactly-once write guarantee — idempotency as business contract
+- LangGraph multi-agent pattern at Lambda scale with Amazon Bedrock RAG
+- SQS/DLQ event hardening with exponential backoff retry
+- Cloud-portable abstractions: Lambda=Cloud Run, Bedrock=Vertex AI,
+  SQS=Pub/Sub, DynamoDB=Firestore/Spanner
+
+Part of the E2A Reference Runtime set alongside
+[order-to-cash-agentic-ai](https://github.com/subhamviky/order-to-cash-agentic-ai) (Python/LangGraph)
+and [financial-settlement-platform](https://github.com/subhamviky/financial-settlement-platform) (Java/Spring Boot).
 
 ---
 
