@@ -11,3 +11,5 @@ deployment.zip
 chroma_db/
 *.dist-info
 EOF
+.env
+.venv/
