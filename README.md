@@ -1,3 +1,12 @@
+> **Architectural spike: historical.** This branch preserves the spike as it was built; the tag
+> `spike-v1` points to the untouched snapshot. The spike surfaced the patterns and gaps that led
+> to the [E2A framework family](https://github.com/subhamviky/e2a-framework). Its text below
+> (phase badges, deployment and "production-grade" statements) describes the spike at that time
+> and is not maintained.
+>
+> **The completed project, rebuilt on the frameworks, is on
+> [`main`](https://github.com/subhamviky/aws-reconciliation-engine/tree/main).**
+
 # Cloud-Native Payment Reconciliation Engine
 
 > Production-grade payment reconciliation system built on AWS — directly mirroring $350M SAP TM financial settlement architecture on cloud-native infrastructure.
