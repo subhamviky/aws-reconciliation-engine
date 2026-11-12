@@ -15,8 +15,8 @@ jobs:
       run:
         working-directory: reconciliation-service
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pipx install "poetry>=2.0,<3"
@@ -27,7 +27,7 @@ jobs:
   contract-drift:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: The vendored settlement contract equals the producer's main
         shell: bash
         run: |
@@ -45,8 +45,8 @@ jobs:
       run:
         working-directory: reconciliation-service/infra
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.17.1"
           terraform_wrapper: false
@@ -70,11 +70,11 @@ jobs:
       AWS_REGION: ap-south-1
       AWS_DEFAULT_REGION: ap-south-1
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.17.1"
           terraform_wrapper: false
