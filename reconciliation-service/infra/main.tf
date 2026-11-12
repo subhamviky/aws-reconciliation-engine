@@ -38,13 +38,25 @@ variable "lambda_package" {
 variable "lambda_handler" {
   type        = string
   description = "Python handler for the API and queue entry points."
-  default     = "app.handler"
+  default     = "reconciliation_service.lambda_entry.handler"
 }
 
 variable "max_receive_count" {
   type        = number
   description = "Deliveries before a message moves to the dead-letter queue."
   default     = 5
+}
+
+variable "setting_settlement_api_url" {
+  type        = string
+  description = "Base URL of the settlement-service event feed."
+  default     = "http://settlement-service.internal:8080"
+}
+
+variable "setting_recon_tenant" {
+  type        = string
+  description = "Tenant whose settlements this deployment reconciles."
+  default     = "acme"
 }
 
 locals {
@@ -139,12 +151,13 @@ resource "aws_lambda_function" "app" {
   memory_size   = 256
   environment {
     variables = {
-      QUEUE_URL          = aws_sqs_queue.main.url
-      SECRET_ARN         = aws_secretsmanager_secret.app.arn
-      ENVIRONMENT        = var.environment
+      QUEUE_URL   = aws_sqs_queue.main.url
+      SECRET_ARN  = aws_secretsmanager_secret.app.arn
+      ENVIRONMENT = var.environment
+
       TABLE_NAME         = aws_dynamodb_table.recon.name
-      SETTLEMENT_API_URL = var.settlement_api_url
-      RECON_TENANT       = var.recon_tenant
+      SETTLEMENT_API_URL = var.setting_settlement_api_url
+      RECON_TENANT       = var.setting_recon_tenant
     }
   }
   depends_on = [aws_cloudwatch_log_group.app]

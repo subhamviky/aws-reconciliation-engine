@@ -45,4 +45,19 @@ run "plan_with_mocks" {
     condition     = aws_cloudwatch_event_rule.poll.schedule_expression == "rate(5 minutes)"
     error_message = "The settlement feed must be polled on a schedule."
   }
+
+  assert {
+    condition     = contains(keys(aws_lambda_function.app.environment[0].variables), "TABLE_NAME")
+    error_message = "The setting TABLE_NAME must reach the runtime."
+  }
+
+  assert {
+    condition     = contains(keys(aws_lambda_function.app.environment[0].variables), "SETTLEMENT_API_URL")
+    error_message = "The setting SETTLEMENT_API_URL must reach the runtime."
+  }
+
+  assert {
+    condition     = contains(keys(aws_lambda_function.app.environment[0].variables), "RECON_TENANT")
+    error_message = "The setting RECON_TENANT must reach the runtime."
+  }
 }

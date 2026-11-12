@@ -2,17 +2,7 @@
 # settlement-service event feed from its durable cursor (lambda_entry.handler,
 # branch source == "aws.events").
 
-variable "settlement_api_url" {
-  type        = string
-  description = "Base URL of the settlement-service event feed."
-  default     = "http://settlement-service.internal:8080"
-}
-
-variable "recon_tenant" {
-  type        = string
-  description = "Tenant whose settlements this deployment reconciles."
-  default     = "acme"
-}
+# SETTLEMENT_API_URL and RECON_TENANT are app settings declared in the A2C request (main.tf).
 
 variable "poll_schedule" {
   type        = string

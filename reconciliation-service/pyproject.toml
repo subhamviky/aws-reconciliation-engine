@@ -2,7 +2,7 @@
 name = "reconciliation-service"
 version = "0.1.0"
 description = ""
-authors = ["Subham Gupta <subhamviky@gmail.com>"]
+authors = []
 readme = "README.md"
 packages = [{include = "reconciliation_service", from = "src"}]
 

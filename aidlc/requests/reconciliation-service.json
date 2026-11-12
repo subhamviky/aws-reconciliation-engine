@@ -17,7 +17,10 @@
       "mangum>=0.17",
       "httpx>=0.27"
     ],
-    "dev_dependencies": ["moto[dynamodb,sqs]>=5.0", "jsonschema>=4.22"]
+    "dev_dependencies": [
+      "moto[dynamodb,sqs]>=5.0",
+      "jsonschema>=4.22"
+    ]
   },
   "harness": {
     "generator_type": "e2a_inherited",
@@ -33,6 +36,26 @@
     "enabled": true,
     "project_type": "FastAPI Microservice",
     "target_cloud": "aws",
-    "mandatory_nfrs": ["Audit", "DeadLetterQueue"]
+    "mandatory_nfrs": [
+      "Audit",
+      "DeadLetterQueue"
+    ],
+    "settings": [
+      {
+        "name": "TABLE_NAME",
+        "terraform": "aws_dynamodb_table.recon.name",
+        "description": "The reconciliation table (infra/dynamodb.tf)."
+      },
+      {
+        "name": "SETTLEMENT_API_URL",
+        "default": "http://settlement-service.internal:8080",
+        "description": "Base URL of the settlement-service event feed."
+      },
+      {
+        "name": "RECON_TENANT",
+        "default": "acme",
+        "description": "Tenant whose settlements this deployment reconciles."
+      }
+    ]
   }
 }

@@ -1,0 +1,98 @@
+{
+  "files": {
+    "reconciliation-service/.devcontainer/devcontainer.json": "87639db81f60c262eb997cb8c2096a8cbbbcb8517bf5c1580055c461ef71b515",
+    "reconciliation-service/.dockerignore": "68037e5d506c8e78f3e283483bf9f8129ad72e8a6b791fa6b43a5062941fa7e0",
+    "reconciliation-service/.env.example": "d1f062d97df059121bbf77988f72d9b4cbd38367158cbf4c88549b42bd6e4c3d",
+    "reconciliation-service/.gitattributes": "05ef65504fbba693a90ab3798e7a6ac91fbde811ef18d6bba09ee62db7d60c59",
+    "reconciliation-service/.github/workflows/a2c-ci.yml": "46d05f3159992026c803e6d8f3156d22baaa1ee3ac4f89f07e273609084fc512",
+    "reconciliation-service/.github/workflows/ci.yml": "d2b370974be6257e6ef134076ff01f75c3a460d5485cab2f3b510411875f461c",
+    "reconciliation-service/.gitignore": "f0800dcf1de617ff2881419f8f054dc42ab49d3ab038f67f645d99baf642b018",
+    "reconciliation-service/Dockerfile": "0c16d49c9b821f6b76796e25fff5c15858a619b86e9ae26a5505189b0bd98c5b",
+    "reconciliation-service/LICENSE": "e3b3050bdd43df6eb040321acf614e3e91e12fca713f2048170f43a6455a4915",
+    "reconciliation-service/Makefile": "644f2bdedd1481bea2f901b87d695d74fcde512992bb30a54d3a3f3784453f14",
+    "reconciliation-service/README.md": "7c7b8e6d6defc9db93143615962501cf862836e5452a98f789d469d11e52f54b",
+    "reconciliation-service/docker-compose.yml": "142ed7979a839cab1f64f060904932fb3e92f2916a0c0fd8ab1e6d4e4922529c",
+    "reconciliation-service/docs/a2c/spec.md": "e8450d2eadad82e07ef50caf63771aec3e29677d0fc014e5ca4557b3218a7d3a",
+    "reconciliation-service/infra/main.tf": "e892e54ab6cd661a517fa46db04acfdd030cad93f2dedf5821d3cd7b6d6b8ea2",
+    "reconciliation-service/infra/tests/aws.tftest.hcl": "6ac82f803ec8c58609af601439c928f953ea044d8e0ea2363cb0a8b435a4e930",
+    "reconciliation-service/pyproject.toml": "1da272cb16e61c8e8b7f83be986729ef4544e07f398e5484e63c8e543abe11e2",
+    "reconciliation-service/src/reconciliation_service/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reconciliation-service/src/reconciliation_service/agents/exception_triage_agent.py": "c3272a377d142c606f1622457ad8992171800a83f5d49ea2456b786a513f2fe5",
+    "reconciliation-service/src/reconciliation_service/config/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reconciliation-service/src/reconciliation_service/generated/nfr.py": "78e93a234ba7bb3d6bfd3ec829e7f046a01de46703684112eb3d76bb47ba53d3",
+    "reconciliation-service/src/reconciliation_service/generated/observability.py": "b251c5b672d6ad5eb5428133b9d9cab2d1b34e8454ca7a8c7212676e4b667e5d",
+    "reconciliation-service/src/reconciliation_service/generated/service.py": "8549ad5c91052c65512552e7ac91af76e7de7788b263ddd603b129a1f162932e",
+    "reconciliation-service/src/reconciliation_service/lambda_entry.py": "ad71ba73eb7629286a67fcc11ab45f1cfd576593281b8b5c8750e63732929e48",
+    "reconciliation-service/src/reconciliation_service/main.py": "98b975cad4bcf7db19313fe4c8035853cdd42efeb70b7643a79b5e3c71e05a3a",
+    "reconciliation-service/src/reconciliation_service/models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reconciliation-service/src/reconciliation_service/routers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reconciliation-service/src/reconciliation_service/services/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reconciliation-service/src/reconciliation_service/settings.py": "63c63a183301a45c145282c777f3f48c0461f78d0455c6cb3cd61949e83c24de",
+    "reconciliation-service/src/reconciliation_service/tools/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reconciliation-service/tests/test_health.py": "df5a7bc75fd907a9e9ece9b438904b1cd91ea9ac4e2d42b2f04428c61b640ffa",
+    "reconciliation-service/tests/test_settings.py": "9bb30dd058bb58a5c303fe2425781ee7190bd87f43327ee42d2746d100ca575a"
+  },
+  "generator": "a2c-framework",
+  "request": {
+    "a2c_sdlc": {
+      "enabled": true,
+      "mandatory_nfrs": [
+        "Audit",
+        "DeadLetterQueue"
+      ],
+      "project_type": "FastAPI Microservice",
+      "settings": [
+        {
+          "description": "The reconciliation table (infra/dynamodb.tf).",
+          "name": "TABLE_NAME",
+          "terraform": "aws_dynamodb_table.recon.name"
+        },
+        {
+          "default": "http://settlement-service.internal:8080",
+          "description": "Base URL of the settlement-service event feed.",
+          "name": "SETTLEMENT_API_URL"
+        },
+        {
+          "default": "acme",
+          "description": "Tenant whose settlements this deployment reconciles.",
+          "name": "RECON_TENANT"
+        }
+      ],
+      "target_cloud": "aws"
+    },
+    "context": {
+      "build_tool": "poetry",
+      "dependencies": [
+        "e2a-framework @ git+https://github.com/subhamviky/e2a-framework.git@v1.1.0",
+        "capability-oriented-dsa @ git+https://github.com/subhamviky/capability-oriented-dsa.git@v0.2.0",
+        "boto3>=1.34",
+        "mangum>=0.17",
+        "httpx>=0.27"
+      ],
+      "dev_dependencies": [
+        "moto[dynamodb,sqs]>=5.0",
+        "jsonschema>=4.22"
+      ],
+      "license": "Apache-2.0",
+      "package_name": "reconciliation_service",
+      "platform": "aws",
+      "project_name": "reconciliation-service",
+      "project_type": "fastapi_microservice",
+      "runtime": "python",
+      "runtime_version": "3.12",
+      "source": "inline"
+    },
+    "harness": {
+      "abstract_class_source": "package",
+      "agent_name": "ExceptionTriageAgent",
+      "domain": "payment-reconciliation",
+      "generator_type": "e2a_inherited",
+      "package_name": "e2a_base"
+    },
+    "prompt": {
+      "user_prompt": "Serverless payment reconciliation: match bank statement lines to completed settlements (exact, FIFO and many-to-one with governed DSA search), detect duplicate payments with union-find, and let an E2A triage agent propose a resolution for each exception; a proposal is executed only after deterministic rules re-validate it against current state."
+    },
+    "tenant_id": "reconciliation"
+  },
+  "version": "1.2.0"
+}
