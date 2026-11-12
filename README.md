@@ -1,17 +1,23 @@
 # Cloud-Native Payment Reconciliation Engine
 
-> **Status:** `main` is being rebuilt by **consuming** the E2A framework family — P0 scaffolds it,
-> G2C generates its E2A class structure, A2C generates its IaC, CI/CD and NFR modules, and the
-> E2A AI-DLC pipeline governs the build. The original spike is preserved unchanged (see Branches).
+> `main` is built by **consuming** the E2A framework family: the AI-DLC pipeline scaffolds the
+> service (P0 + G2C + A2C), matching runs on governed Capability-Oriented DSA calls, and an E2A
+> agent proposes resolutions for exceptions that deterministic rules authorize, execute and confirm.
 
-Asynchronous matching of bank payments to settlements and invoices, with an exception-triage agent whose proposals are confirmed by deterministic rules.
+| Service | Stack | Role |
+|---|---|---|
+| `reconciliation-service` | Python 3.12, FastAPI on AWS Lambda (Mangum), DynamoDB, SQS + DLQ, EventBridge | Matches bank-statement lines against completed settlements (exact, FIFO, many-to-one), clusters duplicate payments, triages exceptions |
+
+Infrastructure is Terraform, tested with a mock provider and applied to a local moto server in CI
+(`reconciliation-ci`). Requirements and the step-by-step guide live in the private hub (`reconciliation/`).
 
 ## Branches and tags
 
 | Branch / tag | Purpose |
 |---|---|
-| `main` | Framework-consumption build: the service built on, and governed by, the framework family. |
-| `spike/v1-original` · tag `spike-v1` | The original architectural spike. It helped discover the invariants that became the frameworks. Frozen. |
+| `main` | Framework-consumption build. |
+| `spike/v1-original` · tag `spike-v1` | Snapshot of the original spike (Phase 1 on AWS, Phase 2 LangGraph + Bedrock). Frozen. |
+| `aidlc/reconciliation-service` | The untouched AI-DLC scaffold, as generated. |
 
 ## Framework family
 
