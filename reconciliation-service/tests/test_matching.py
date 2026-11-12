@@ -38,10 +38,10 @@ def test_no_combination_is_unmatched_not_ambiguous():
     assert d.match_type is None and not d.ambiguous
 
 
-def test_truncated_enumeration_is_ambiguous():
-    items = [item(f"S{i}", "10.00", i) for i in range(6)]          # 2^6 = 64 subsets > limit 4
-    d = Matcher(enumeration_limit=4).decide(line("L1", "30.00"), items)
-    assert d.match_type is None and d.ambiguous and "truncated" in d.reason
+def test_a_search_stopped_by_its_bound_is_ambiguous():
+    items = [item(f"S{i}", "10.00", i) for i in range(6)]          # 3 items needed; 2 states allowed
+    d = Matcher(max_nodes=2).decide(line("L1", "30.00"), items)
+    assert d.match_type is None and d.ambiguous and "stopped at its bound" in d.reason
 
 
 def test_nearest_uses_lower_bound_and_orders_by_distance():

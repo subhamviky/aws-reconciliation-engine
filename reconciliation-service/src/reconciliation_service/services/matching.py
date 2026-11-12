@@ -3,10 +3,10 @@
 1. EXACT   the line's reference is an open settlement id with the same amount
 2. FIFO    the oldest open item with exactly the line's amount
 3. SUBSET  several open items that add up to exactly the line's amount (many-to-one):
-           KNAPSACK_01 decides cheaply whether such a subset exists, then a bounded
-           SUBSETS enumeration finds the smallest one. A truncated enumeration is
-           AMBIGUOUS, never "no match": DSA says so, and the result must be honoured.
-Duplicates are clusters found with UNION_FIND.
+           one DSA SUBSET_SUM call finds the smallest such set (ties: the oldest items),
+           on the amounts as Decimals with scale 2. A search stopped by its bound is
+           AMBIGUOUS, never "no match": DSA says so (complete=False), and it is honoured.
+Duplicates are the line's group in DSA UNION_FIND GROUP_BY_KEYS (lines that share a key).
 """
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -15,10 +15,6 @@ from typing import Dict, List, Optional
 from capability_oriented_dsa import DSAFacade, SequenceState, UnionFindState
 
 from ..models.records import BankLine, OpenItem
-
-
-def cents(amount: Decimal) -> int:
-    return int((amount * 100).to_integral_value())
 
 
 @dataclass
@@ -30,8 +26,8 @@ class MatchDecision:
 
 
 class Matcher:
-    def __init__(self, max_candidates: int = 9, enumeration_limit: int = 1000) -> None:
-        self.max_candidates, self.enumeration_limit = max_candidates, enumeration_limit
+    def __init__(self, max_candidates: int = 9, max_nodes: int = 10000) -> None:
+        self.max_candidates, self.max_nodes = max_candidates, max_nodes
         self.dsa = DSAFacade()
 
     def decide(self, line: BankLine, open_items: List[OpenItem]) -> MatchDecision:
@@ -49,24 +45,19 @@ class Matcher:
         if len(smaller) < 2:
             return MatchDecision(None, reason="no combination of open items")
         candidates = smaller[: self.max_candidates]
-        values, target = [cents(i.amount) for i in candidates], cents(line.amount)
-        best = self.dsa.execute(structure_type="SEQUENCE", capability="OPTIMIZATION", operation="KNAPSACK_01",
-                                state=SequenceState([(v, v) for v in values]), capacity=target).data
-        if best != target:
+        result = self.dsa.execute(structure_type="SEQUENCE", capability="OPTIMIZATION", operation="SUBSET_SUM",
+                                  state=SequenceState([i.amount for i in candidates]), target=line.amount, scale=2,
+                                  max_nodes=self.max_nodes)
+        if not result.complete:
+            return MatchDecision(None, ambiguous=True, reason="search stopped at its bound before an answer")
+        if not result.found:
             if len(smaller) > len(candidates):
                 return MatchDecision(None, ambiguous=True,
                                      reason=f"no exact combination among the {len(candidates)} oldest of "
                                             f"{len(smaller)} candidate items")
             return MatchDecision(None, reason="no combination of open items adds up to the amount")
-        result = self.dsa.execute(structure_type="SEQUENCE", capability="ENUMERATION", operation="SUBSETS",
-                                  state=SequenceState(list(range(len(candidates)))),
-                                  enumeration_limit=self.enumeration_limit)
-        if result.metadata.get("truncated"):
-            return MatchDecision(None, ambiguous=True, reason="search truncated by the enumeration limit")
-        exact = [s for s in result.data if s and sum(values[i] for i in s) == target]
-        best_subset = min(exact, key=lambda s: (len(s), s))
-        return MatchDecision("SUBSET", [candidates[i] for i in best_subset],
-                             reason=f"{len(best_subset)} open items add up to the amount")
+        return MatchDecision("SUBSET", [candidates[i] for i in result.data],
+                             reason=f"{len(result.data)} open items add up to the amount")
 
     def nearest(self, amount: Decimal, items: List[OpenItem], count: int = 3) -> List[OpenItem]:
         """Open items with the closest amounts (DSA LOWER_BOUND on the sorted amounts)."""
@@ -79,28 +70,21 @@ class Matcher:
         return sorted(window, key=lambda i: (abs(i.amount - amount), i.settled_at))[:count]
 
 
-def same_payment(a: Dict, b: Dict) -> bool:
-    if a["bank_txn_id"] == b["bank_txn_id"]:
-        return True
+def payment_keys(line: Dict) -> list:
+    """Two lines are the same payment when they share the bank transaction id, or all of
+    amount, currency, value date, counterparty account and reference."""
     fields = ("amount", "currency", "value_date", "counterparty_account", "reference")
-    return all(str(a.get(f)) == str(b.get(f)) for f in fields)
+    return [("txn", line["bank_txn_id"]), ("fields",) + tuple(str(line.get(f)) for f in fields)]
 
 
 def duplicate_of(new_line: Dict, existing: List[Dict], dsa: DSAFacade = None) -> Optional[str]:
-    """The earliest existing line in the new line's duplicate cluster (DSA UNION_FIND), if any."""
+    """The earliest existing line in the new line's duplicate group (DSA GROUP_BY_KEYS), if any."""
     dsa = dsa or DSAFacade()
     lines = [l for l in existing if l["line_id"] != new_line["line_id"]] + [new_line]
-    state = UnionFindState()
-    for l in lines:
-        dsa.execute(structure_type="UNION_FIND", capability="MUTATION", operation="ADD", state=state, element=l["line_id"])
-    for i, a in enumerate(lines):
-        for b in lines[i + 1:]:
-            if same_payment(a, b):
-                dsa.execute(structure_type="UNION_FIND", capability="MUTATION", operation="UNION",
-                            state=state, left=a["line_id"], right=b["line_id"])
-    for l in sorted(existing, key=lambda l: (str(l["value_date"]), l["line_id"])):
-        if l["line_id"] != new_line["line_id"] and dsa.execute(
-                structure_type="UNION_FIND", capability="QUERY", operation="CONNECTED", state=state,
-                left=l["line_id"], right=new_line["line_id"]).data:
-            return l["line_id"]
-    return None
+    groups = dsa.execute(structure_type="UNION_FIND", capability="MUTATION", operation="GROUP_BY_KEYS",
+                         state=UnionFindState(), elements=lines, keys=payment_keys,
+                         element_id=lambda l: l["line_id"]).data
+    group = next(g for g in groups if any(l["line_id"] == new_line["line_id"] for l in g))
+    earlier = sorted((l for l in group if l["line_id"] != new_line["line_id"]),
+                     key=lambda l: (str(l["value_date"]), l["line_id"]))
+    return earlier[0]["line_id"] if earlier else None
