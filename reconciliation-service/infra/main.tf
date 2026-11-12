@@ -139,9 +139,12 @@ resource "aws_lambda_function" "app" {
   memory_size   = 256
   environment {
     variables = {
-      QUEUE_URL   = aws_sqs_queue.main.url
-      SECRET_ARN  = aws_secretsmanager_secret.app.arn
-      ENVIRONMENT = var.environment
+      QUEUE_URL          = aws_sqs_queue.main.url
+      SECRET_ARN         = aws_secretsmanager_secret.app.arn
+      ENVIRONMENT        = var.environment
+      TABLE_NAME         = aws_dynamodb_table.recon.name
+      SETTLEMENT_API_URL = var.settlement_api_url
+      RECON_TENANT       = var.recon_tenant
     }
   }
   depends_on = [aws_cloudwatch_log_group.app]

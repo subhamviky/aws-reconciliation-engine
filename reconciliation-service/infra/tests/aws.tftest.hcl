@@ -20,4 +20,29 @@ run "plan_with_mocks" {
     condition     = aws_sqs_queue.dlq.message_retention_seconds == 1209600
     error_message = "The dead-letter queue must keep messages for 14 days."
   }
+
+  assert {
+    condition     = aws_dynamodb_table.recon.hash_key == "pk" && aws_dynamodb_table.recon.range_key == "sk"
+    error_message = "The table must use the pk / sk keys the repository writes."
+  }
+
+  assert {
+    condition     = aws_dynamodb_table.recon.point_in_time_recovery[0].enabled
+    error_message = "Reconciliation state must be recoverable (PITR)."
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.handler == "reconciliation_service.lambda_entry.handler"
+    error_message = "The Lambda must run the service's entry point."
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.environment[0].variables["RECON_TENANT"] == "acme"
+    error_message = "The Lambda must know its tenant."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_rule.poll.schedule_expression == "rate(5 minutes)"
+    error_message = "The settlement feed must be polled on a schedule."
+  }
 }

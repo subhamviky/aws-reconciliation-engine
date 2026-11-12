@@ -1,0 +1,107 @@
+name: reconciliation-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  reconciliation-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reconciliation-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pipx install "poetry>=2.0,<3"
+      - run: poetry install --no-interaction
+      - name: Unit, flow, Lambda and contract tests (DynamoDB and SQS mocked by moto)
+        run: poetry run pytest -q
+
+  contract-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The vendored settlement contract equals the producer's main
+        shell: bash
+        run: |
+          url=https://raw.githubusercontent.com/subhamviky/financial-settlement-platform/main/contracts/events/settlement-event.v1.schema.json
+          if ! curl -fsSL "$url" -o owner.json; then
+            echo "::warning::producer contract not reachable at $url (not published yet?); drift not checked"
+            exit 0
+          fi
+          diff -u owner.json contracts/vendor/settlement-event.v1.schema.json
+          echo "vendored settlement contract is current"
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reconciliation-service/infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+      - name: fmt, validate and test against the mock provider (no AWS account)
+        run: |
+          terraform init -backend=false -input=false
+          terraform fmt -check -recursive
+          terraform validate
+          terraform test
+
+  terraform-apply-moto:
+    runs-on: ubuntu-latest
+    needs: [reconciliation-service, terraform]
+    defaults:
+      run:
+        working-directory: reconciliation-service
+        shell: bash
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ap-south-1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.17.1"
+          terraform_wrapper: false
+      - name: Start a moto server (a local stand-in for the AWS APIs)
+        run: |
+          pip install "moto[server]>=5.0"
+          nohup moto_server -p 5000 > "$RUNNER_TEMP/moto.log" 2>&1 &
+          for _ in $(seq 30); do curl -fs http://localhost:5000/moto-api/ >/dev/null && break; sleep 1; done
+          curl -fs http://localhost:5000/moto-api/ >/dev/null
+      - name: terraform apply to moto
+        working-directory: reconciliation-service/infra
+        run: |
+          cp moto/provider_override.tf .
+          mkdir -p build && (cd build && echo "# placeholder: moto does not run the code" > handler.py && zip -q lambda.zip handler.py)
+          terraform init -input=false
+          terraform apply -auto-approve -input=false
+          {
+            echo "TABLE_NAME=$(terraform output -raw table_name)"
+            echo "QUEUE_URL=$(terraform output -raw queue_url)"
+          } >> "$GITHUB_ENV"
+      - run: pipx install "poetry>=2.0,<3"
+      - run: poetry install --no-interaction
+      - name: Smoke test the applied stack through the real Lambda handler
+        env:
+          AWS_ENDPOINT_URL: http://localhost:5000
+        run: poetry run python scripts/moto_smoke.py
+      - name: terraform destroy
+        if: always()
+        working-directory: reconciliation-service/infra
+        run: terraform destroy -auto-approve -input=false || true
