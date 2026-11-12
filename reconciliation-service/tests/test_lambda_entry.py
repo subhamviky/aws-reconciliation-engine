@@ -31,7 +31,8 @@ def test_sqs_batch_reports_only_the_poison_message(wired, feed):
 
 def test_schedule_polls_the_settlement_feed(wired, feed):
     feed.completed("S1", "100.00")
-    assert lambda_entry.handler({"source": "aws.events", "detail-type": "Scheduled Event"}, None) == {"ingested": 1}
+    assert lambda_entry.handler({"source": "aws.events", "detail-type": "Scheduled Event"}, None) == \
+        {"ingested": 1, "ledger_posted": 0}
 
 
 def test_http_goes_through_mangum(wired):

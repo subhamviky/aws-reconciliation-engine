@@ -20,6 +20,12 @@ def poll_settlements(request: Request) -> dict:
     return {"ingested": request.app.state.recon_service.poll_settlements()}
 
 
+@router.post("/ledger/retry")
+def retry_ledger(request: Request) -> dict:
+    """Re-send pending write-off and refund postings now (the schedule does it every 5 minutes)."""
+    return {"posted": request.app.state.recon_service.retry_ledger_postings()}
+
+
 @router.get("/lines/{line_id}")
 def get_line(line_id: str, request: Request) -> dict:
     service = request.app.state.recon_service

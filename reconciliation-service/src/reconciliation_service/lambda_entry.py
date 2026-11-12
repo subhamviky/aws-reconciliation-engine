@@ -3,7 +3,7 @@
   SQS batch          -> reconcile each bank line; failed records are reported
                         individually (ReportBatchItemFailures) and reach the DLQ
                         after maxReceiveCount
-  EventBridge rule   -> poll the settlement feed (schedule.tf)
+  EventBridge rule   -> poll the settlement feed and retry pending ledger postings (schedule.tf)
   API Gateway (HTTP) -> the FastAPI app through Mangum
 """
 import logging
@@ -30,5 +30,5 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 failures.append({"itemIdentifier": record["messageId"]})
         return {"batchItemFailures": failures}
     if event.get("source") == "aws.events":
-        return {"ingested": service.poll_settlements()}
+        return {"ingested": service.poll_settlements(), "ledger_posted": service.retry_ledger_postings()}
     return _http(event, context)

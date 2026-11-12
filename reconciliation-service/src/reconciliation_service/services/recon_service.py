@@ -10,6 +10,7 @@ from e2a_simulated_llm import SimulatedLLMService
 
 from ..agents.exception_triage_agent import ExceptionTriageAgent
 from ..models.records import BankLine, ExceptionCase, OpenItem, Proposal
+from .ledger_client import SettlementLedger, adjustment_request
 from .matching import Matcher, duplicate_of
 from .repository import ReconRepository
 from .settlement_client import SettlementFeed, events_from
@@ -25,8 +26,10 @@ class ConcurrentChange(Exception):
 
 class ReconciliationService:
     def __init__(self, repo: ReconRepository, feed: SettlementFeed, llm: SimulatedLLMService, tenant_id: str,
-                 matcher: Matcher = None, write_off_limit: Decimal = Decimal("5.00")) -> None:
+                 matcher: Matcher = None, write_off_limit: Decimal = Decimal("5.00"),
+                 ledger: Optional[SettlementLedger] = None) -> None:
         self.repo, self.feed, self.llm, self.tenant = repo, feed, llm, tenant_id
+        self.ledger = ledger                     # None: adjustments are not posted (tests, local runs)
         self.matcher = matcher or Matcher()
         self.write_off_limit = write_off_limit
         self.agent = ExceptionTriageAgent()
@@ -92,8 +95,12 @@ class ReconciliationService:
         if proposal.action == "REQUEST_REMITTANCE":
             return True, "always allowed"
         if proposal.action == "REFUND_DUPLICATE":
-            return (case.kind == "DUPLICATE"), ("duplicate payment" if case.kind == "DUPLICATE"
-                                                else "a refund is only allowed for a duplicate payment")
+            if case.kind != "DUPLICATE":
+                return False, "a refund is only allowed for a duplicate payment"
+            original = self.repo.get_line(self.tenant, case.duplicate_of) if case.duplicate_of else None
+            if not original or original.get("status") != "MATCHED":
+                return False, "refund only after the original payment is matched, so the payer is known"
+            return True, "duplicate of a matched payment"
         items = [self.repo.get_open_item(self.tenant, line.counterparty_account, sid) for sid in proposal.settlement_ids]
         if not items or any(i is None or i.status != "OPEN" or i.currency != line.currency for i in items):
             return False, "every proposed settlement must be an OPEN item of this account and currency"
@@ -130,13 +137,39 @@ class ReconciliationService:
             if not confirmed:                                   # deterministic confirmation of the effect
                 raise ConcurrentChange("the match could not be confirmed")
             case.status, case.resolution = "RESOLVED", f"{action} (write-off {write_off})"
+            if write_off > 0:
+                case.ledger_request = adjustment_request(
+                    self.tenant, line_id, "WRITE_OFF", items[0].settlement_id, write_off,
+                    f"short payment: bank line {line_id} paid {line.amount} against {items[0].amount}")
         elif action == "REFUND_DUPLICATE":
             self.repo.set_line_status(self.tenant, line_id, "REFUND_REQUESTED")
             case.status, case.resolution = "RESOLVED", "refund requested"
+            original = self.repo.get_line(self.tenant, case.duplicate_of)
+            case.ledger_request = adjustment_request(
+                self.tenant, line_id, "REFUND", original["matched_settlements"][0], line.amount,
+                f"duplicate payment: bank line {line_id} repeats {case.duplicate_of}")
         else:
             case.status, case.resolution = "WAITING_REMITTANCE", "remittance advice requested"
+        self.repo.put_exception(self.tenant, case)               # the reconciliation decision is durable first
+        self._post_to_ledger(case)
+        return {"line_id": line_id, "status": case.status, "resolution": case.resolution,
+                "ledger_status": case.ledger_status, "ledger_detail": case.ledger_detail}
+
+    # ------------------------------------------------------------ the ledger
+    def _post_to_ledger(self, case: ExceptionCase) -> None:
+        if not case.ledger_request or not self.ledger or case.ledger_status in ("POSTED", "REFUSED"):
+            return
+        result = self.ledger.post_adjustment(self.tenant, case.ledger_request)
+        case.ledger_status, case.ledger_detail = result["outcome"], result.get("detail")
+        case.ledger_adjustment_id = result.get("adjustment_id") or case.ledger_adjustment_id
         self.repo.put_exception(self.tenant, case)
-        return {"line_id": line_id, "status": case.status, "resolution": case.resolution}
+
+    def retry_ledger_postings(self) -> int:
+        """Re-send every PENDING posting with its original idempotency key (scheduled)."""
+        pending = [c for c in self.repo.exceptions(self.tenant) if c.ledger_status == "PENDING"]
+        for case in pending:
+            self._post_to_ledger(case)
+        return sum(1 for c in pending if c.ledger_status == "POSTED")
 
     # ---------------------------------------------------------------- reads
     def exceptions(self, status: Optional[str] = None) -> List[ExceptionCase]:

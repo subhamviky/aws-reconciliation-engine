@@ -49,3 +49,8 @@ class ExceptionCase(BaseModel):
     proposal: Optional[Proposal] = None          # what accept() will execute
     status: Literal["OPEN", "RESOLVED", "WAITING_REMITTANCE"] = "OPEN"
     resolution: Optional[str] = None
+    # Posting of an accepted write-off or refund to the settlement ledger (settlement-service)
+    ledger_request: Optional[dict] = None       # what is posted; re-sent unchanged on retry
+    ledger_status: Optional[Literal["POSTED", "PENDING", "REFUSED"]] = None
+    ledger_detail: Optional[str] = None
+    ledger_adjustment_id: Optional[str] = None

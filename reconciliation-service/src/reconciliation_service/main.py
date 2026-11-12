@@ -10,6 +10,7 @@ from .services.llm import build_triage_llm
 from .services.queue import DirectLineQueue, SqsLineQueue
 from .services.recon_service import ReconciliationService
 from .services.repository import ReconRepository
+from .services.ledger_client import HttpSettlementLedger
 from .services.settlement_client import HttpSettlementFeed
 
 logger = logging.getLogger("reconciliation_service")
@@ -19,11 +20,13 @@ def build_service() -> ReconciliationService:
     """Wiring from the environment the Lambda gets from infra/main.tf."""
     region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "eu-west-1"))
     table = boto3.resource("dynamodb", region_name=region).Table(os.getenv("TABLE_NAME", "reconciliation"))
+    settlement_url = os.getenv("SETTLEMENT_API_URL", "http://localhost:8080")
     return ReconciliationService(
         repo=ReconRepository(table),
-        feed=HttpSettlementFeed(os.getenv("SETTLEMENT_API_URL", "http://localhost:8080")),
+        feed=HttpSettlementFeed(settlement_url),
         llm=build_triage_llm(),
         tenant_id=os.getenv("RECON_TENANT", "acme"),
+        ledger=HttpSettlementLedger(settlement_url),
     )
 
 
