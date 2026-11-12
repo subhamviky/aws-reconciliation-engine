@@ -1,0 +1,38 @@
+{
+  "tenant_id": "reconciliation",
+  "context": {
+    "source": "inline",
+    "project_name": "reconciliation-service",
+    "package_name": "reconciliation_service",
+    "runtime": "python",
+    "runtime_version": "3.12",
+    "build_tool": "poetry",
+    "platform": "aws",
+    "project_type": "fastapi_microservice",
+    "license": "Apache-2.0",
+    "dependencies": [
+      "e2a-framework @ git+https://github.com/subhamviky/e2a-framework.git@v1.1.0",
+      "capability-oriented-dsa @ git+https://github.com/subhamviky/capability-oriented-dsa.git@v0.2.0",
+      "boto3>=1.34",
+      "mangum>=0.17",
+      "httpx>=0.27"
+    ],
+    "dev_dependencies": ["moto[dynamodb,sqs]>=5.0", "jsonschema>=4.22"]
+  },
+  "harness": {
+    "generator_type": "e2a_inherited",
+    "agent_name": "ExceptionTriageAgent",
+    "abstract_class_source": "package",
+    "package_name": "e2a_base",
+    "domain": "payment-reconciliation"
+  },
+  "prompt": {
+    "user_prompt": "Serverless payment reconciliation: match bank statement lines to completed settlements (exact, FIFO and many-to-one with governed DSA search), detect duplicate payments with union-find, and let an E2A triage agent propose a resolution for each exception; a proposal is executed only after deterministic rules re-validate it against current state."
+  },
+  "a2c_sdlc": {
+    "enabled": true,
+    "project_type": "FastAPI Microservice",
+    "target_cloud": "aws",
+    "mandatory_nfrs": ["Audit", "DeadLetterQueue"]
+  }
+}

@@ -1,0 +1,6 @@
+[
+  {"line_id": "STMT-2026-11-03-001", "bank_txn_id": "BNK-88121", "value_date": "2026-11-03", "amount": "100.00",
+   "currency": "EUR", "counterparty_account": "ACC-PAYEE-1", "reference": "5b8f0c3e-2a1d-4c7e-9f6a-0d4e8b2c1a93"},
+  {"line_id": "STMT-2026-11-03-002", "bank_txn_id": "BNK-88122", "value_date": "2026-11-03", "amount": "247.50",
+   "currency": "EUR", "counterparty_account": "ACC-PAYEE-1", "reference": null}
+]
