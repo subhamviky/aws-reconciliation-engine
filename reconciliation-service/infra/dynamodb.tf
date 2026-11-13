@@ -24,6 +24,13 @@ resource "aws_dynamodb_table" "recon" {
     type = "S"
   }
 
+  # E2A's claims (e2a-adapters, design note D-02) set "ttl" for garbage collection only:
+  # correctness uses their explicit expiry fields, never the timing of TTL deletion.
+  ttl {
+    attribute_name = "ttl"
+    enabled        = true
+  }
+
   point_in_time_recovery {
     enabled = true
   }
@@ -35,7 +42,8 @@ resource "aws_dynamodb_table" "recon" {
   tags = local.tags
 }
 
-# Least privilege: item-level reads/writes and transactions on this table only.
+# Least privilege: item-level reads/writes and transactions on this table only. E2A's claim and
+# lease (e2a-adapters) need nothing more: GetItem and UpdateItem on the same table.
 data "aws_iam_policy_document" "table" {
   statement {
     sid = "ReconciliationTable"

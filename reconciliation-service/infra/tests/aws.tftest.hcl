@@ -27,6 +27,11 @@ run "plan_with_mocks" {
   }
 
   assert {
+    condition     = aws_dynamodb_table.recon.ttl[0].enabled && aws_dynamodb_table.recon.ttl[0].attribute_name == "ttl"
+    error_message = "TTL on \"ttl\" garbage-collects E2A's claims (e2a-adapters)."
+  }
+
+  assert {
     condition     = aws_dynamodb_table.recon.point_in_time_recovery[0].enabled
     error_message = "Reconciliation state must be recoverable (PITR)."
   }

@@ -1,11 +1,22 @@
 """Reconciliation: expected cash (open items from settlement events) against actual
 cash (bank lines). Every material change goes through the repository's conditional
 writes; the triage agent only proposes, and accept() re-validates before executing.
+
+Each bank line is processed under an E2A claim in DynamoDB (e2a-adapters, design note D-02):
+a delivery whose Lambda stopped half-way is taken over by the next one, a concurrent delivery
+waits for SQS to redeliver, and a delivery after success replays the stored outcome. The
+scheduled ledger retry runs under a DynamoDB lease, so two runs never post at once.
 """
+import hashlib
+import json
+import logging
+import os
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
+from e2a import BaseDistributedLock, BaseIdempotencyStore, ClaimStatus
+from e2a_adapters.aws import DynamoDBIdempotencyStore, DynamoDBLease
 from e2a_simulated_llm import SimulatedLLMService
 
 from ..agents.exception_triage_agent import ExceptionTriageAgent
@@ -24,11 +35,32 @@ class ConcurrentChange(Exception):
     """An item changed between validation and execution (HTTP 409)."""
 
 
+class LineInProgress(Exception):
+    """Another delivery of this line holds an unexpired claim. Raised, so that SQS redelivers it
+    after the visibility timeout instead of deleting the message."""
+
+
+class LineConflict(Exception):
+    """The same line_id arrived with different content: never processed; SQS sends it to the DLQ."""
+
+
+logger = logging.getLogger("reconciliation_service")
+
+# The claim lease outlives any live invocation (Lambda timeout 30 s) and has expired by the time
+# SQS redelivers (visibility timeout 60 s), so a stopped invocation's line is taken over then.
+LINE_CLAIM_LEASE_SECONDS = int(os.getenv("LINE_CLAIM_LEASE_SECONDS", "45"))
+LEDGER_RETRY_LEASE_SECONDS = int(os.getenv("LEDGER_RETRY_LEASE_SECONDS", "60"))
+
+
 class ReconciliationService:
     def __init__(self, repo: ReconRepository, feed: SettlementFeed, llm: SimulatedLLMService, tenant_id: str,
                  matcher: Matcher = None, write_off_limit: Decimal = Decimal("5.00"),
-                 ledger: Optional[SettlementLedger] = None) -> None:
+                 ledger: Optional[SettlementLedger] = None, claims: Optional[BaseIdempotencyStore] = None,
+                 lease: Optional[BaseDistributedLock] = None) -> None:
         self.repo, self.feed, self.llm, self.tenant = repo, feed, llm, tenant_id
+        # E2A's ports, by default on the service's own DynamoDB table (items under E2A#... partitions)
+        self.claims = claims or DynamoDBIdempotencyStore(repo.table)
+        self.lease = lease or DynamoDBLease(repo.table)
         self.ledger = ledger                     # None: adjustments are not posted (tests, local runs)
         self.matcher = matcher or Matcher()
         self.write_off_limit = write_off_limit
@@ -54,8 +86,32 @@ class ReconciliationService:
 
     # --------------------------------------------------- actual cash (lines)
     def reconcile(self, line: BankLine) -> Dict:
+        """Process one bank line exactly once, under an E2A claim on its line_id."""
+        fingerprint = hashlib.sha256(line.model_dump_json().encode()).hexdigest()
+        claim = self.claims.claim(line.line_id, tenant_id=self.tenant, fingerprint=fingerprint,
+                                  lease_seconds=LINE_CLAIM_LEASE_SECONDS, recover=True)
+        if claim.status == ClaimStatus.REPLAY:                       # redelivery after success: no effect
+            return {"line_id": line.line_id, "status": "ALREADY_RECEIVED", "outcome": claim.result}
+        if claim.status == ClaimStatus.IN_PROGRESS:
+            raise LineInProgress(f"line {line.line_id} is being processed by another delivery")
+        if claim.status != ClaimStatus.CLAIMED:                      # CONFLICT (FAILED_FINAL is never written)
+            raise LineConflict(f"line {line.line_id}: {claim.status.value}, the same id with different content")
+        try:
+            result = self._reconcile(line)
+        except Exception:
+            self.claims.fail(line.line_id, retryable=True, tenant_id=self.tenant, owner=claim.owner)
+            raise
+        if not self.claims.complete(line.line_id, json.loads(json.dumps(result, default=str)),
+                                    tenant_id=self.tenant, owner=claim.owner):
+            logger.warning("line %s: claim taken over before completion; the writes were conditional", line.line_id)
+        return result
+
+    def _reconcile(self, line: BankLine) -> Dict:
         if not self.repo.add_line(self.tenant, line):
-            return {"line_id": line.line_id, "status": "ALREADY_RECEIVED"}       # redelivery: no effect
+            # Stored by an earlier delivery whose invocation stopped: resume from the stored status.
+            done = self._outcome_of(line.line_id)
+            if done is not None:
+                return done
         existing = self.repo.lines(self.tenant)
         original = duplicate_of(line.model_dump(mode="json"), existing)
         if original:
@@ -69,6 +125,18 @@ class ReconciliationService:
         kind = "AMBIGUOUS" if decision.ambiguous else "UNMATCHED"
         return self._exception(line, kind, decision.reason or "matched items changed concurrently",
                                self.matcher.nearest(line.amount, items))
+
+    def _outcome_of(self, line_id: str) -> Optional[Dict]:
+        """The outcome an earlier delivery already wrote, or None if it stopped before deciding."""
+        stored = self.repo.get_line(self.tenant, line_id) or {}
+        if stored.get("status") == "MATCHED":
+            return {"line_id": line_id, "status": "MATCHED", "match_type": stored.get("match_type"),
+                    "settlement_ids": list(stored.get("matched_settlements") or [])}
+        case = self.repo.get_exception(self.tenant, line_id) if stored.get("status") == "EXCEPTION" else None
+        if case is not None:
+            return {"line_id": line_id, "status": "EXCEPTION", "kind": case.kind,
+                    "proposal": case.proposal.model_dump(), "agent_proposal_valid": case.agent_proposal_valid}
+        return None
 
     # ------------------------------------------------------------ exceptions
     def _exception(self, line: BankLine, kind: str, detail: str, candidates: List[OpenItem],
@@ -165,11 +233,19 @@ class ReconciliationService:
         self.repo.put_exception(self.tenant, case)
 
     def retry_ledger_postings(self) -> int:
-        """Re-send every PENDING posting with its original idempotency key (scheduled)."""
-        pending = [c for c in self.repo.exceptions(self.tenant) if c.ledger_status == "PENDING"]
-        for case in pending:
-            self._post_to_ledger(case)
-        return sum(1 for c in pending if c.ledger_status == "POSTED")
+        """Re-send every PENDING posting with its original idempotency key (scheduled). Runs under
+        a lease: a second run while one is posting returns 0 and posts nothing."""
+        handle = self.lease.acquire(f"ledger-retry#{self.tenant}", LEDGER_RETRY_LEASE_SECONDS)
+        if not handle:
+            logger.info("ledger retry skipped: another run holds the lease")
+            return 0
+        try:
+            pending = [c for c in self.repo.exceptions(self.tenant) if c.ledger_status == "PENDING"]
+            for case in pending:
+                self._post_to_ledger(case)
+            return sum(1 for c in pending if c.ledger_status == "POSTED")
+        finally:
+            self.lease.release(handle)
 
     # ---------------------------------------------------------------- reads
     def exceptions(self, status: Optional[str] = None) -> List[ExceptionCase]:

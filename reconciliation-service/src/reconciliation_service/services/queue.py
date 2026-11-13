@@ -24,4 +24,13 @@ class DirectLineQueue:
         self.handle = handle
 
     def submit(self, lines: List[BankLine]) -> List[Dict]:
-        return [self.handle(line) for line in lines]
+        from .recon_service import LineConflict, LineInProgress
+        results = []
+        for line in lines:
+            try:
+                results.append(self.handle(line))
+            except LineInProgress:              # SQS would redeliver; synchronously the caller retries
+                results.append({"line_id": line.line_id, "status": "IN_PROGRESS"})
+            except LineConflict as e:
+                results.append({"line_id": line.line_id, "status": "CONFLICT", "detail": str(e)})
+        return results
