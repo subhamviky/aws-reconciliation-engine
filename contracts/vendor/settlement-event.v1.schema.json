@@ -21,7 +21,7 @@
         "settlement_id": {"type": "string", "format": "uuid"},
         "payer_account": {"type": "string", "minLength": 1},
         "payee_account": {"type": "string", "minLength": 1},
-        "amount": {"type": "string", "pattern": "^[0-9]+\\.[0-9]{2}$", "description": "Decimal as a string, two fraction digits: no floating-point rounding."},
+        "amount": {"type": "string", "format": "decimal", "pattern": "^[0-9]+\\.[0-9]{2}$", "description": "Decimal as a string, two fraction digits: no floating-point rounding."},
         "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
         "status": {"enum": ["RECEIVED", "LEDGER_POSTED", "COMPLETED", "COMPENSATING", "COMPENSATED", "REJECTED"]},
         "reason": {"type": ["string", "null"]}
@@ -35,7 +35,7 @@
       "properties": {
         "adjustment_id": {"type": "string", "format": "uuid"},
         "type": {"enum": ["WRITE_OFF", "REFUND"]},
-        "amount": {"type": "string", "pattern": "^[0-9]+\\.[0-9]{2}$"},
+        "amount": {"type": "string", "format": "decimal", "pattern": "^[0-9]+\\.[0-9]{2}$"},
         "debit_account": {"type": "string", "minLength": 1},
         "credit_account": {"type": "string", "minLength": 1},
         "reason": {"type": "string", "minLength": 1},
@@ -43,6 +43,21 @@
       }
     }
   },
+  "examples": [
+    {"event_id": "6f1c2a9e-0b7d-4f43-9c1e-2d5a8b3c4e10", "event_type": "settlement.completed", "schema_version": "1",
+     "occurred_at": "2026-11-12T10:00:00Z", "tenant_id": "acme", "correlation_id": "c-1",
+     "settlement": {"settlement_id": "0b8f6c2e-1d2a-4c3b-9a8e-2f6e9d1a7b30", "payer_account": "ACC-1000",
+                    "payee_account": "ACC-2000", "amount": "360.00", "currency": "EUR", "status": "COMPLETED",
+                    "reason": null}},
+    {"event_id": "8a2d4c6e-1f3b-4a5c-8d7e-9f0a1b2c3d40", "event_type": "ledger.adjusted", "schema_version": "1",
+     "occurred_at": "2026-11-12T11:00:00Z", "tenant_id": "acme", "correlation_id": "c-2",
+     "settlement": {"settlement_id": "0b8f6c2e-1d2a-4c3b-9a8e-2f6e9d1a7b30", "payer_account": "ACC-1000",
+                    "payee_account": "ACC-2000", "amount": "360.00", "currency": "EUR", "status": "COMPLETED",
+                    "reason": null},
+     "adjustment": {"adjustment_id": "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e60", "type": "WRITE_OFF", "amount": "2.50",
+                    "debit_account": "ACC-WRITEOFF", "credit_account": "ACC-2000", "reason": "short payment",
+                    "reference": "BANK-002"}}
+  ],
   "if": {"properties": {"event_type": {"const": "ledger.adjusted"}}},
   "then": {"required": ["adjustment"]},
   "else": {"not": {"required": ["adjustment"]}}
