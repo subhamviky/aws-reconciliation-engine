@@ -23,6 +23,8 @@ jobs:
       - run: poetry install --no-interaction
       - name: Unit, flow, Lambda and contract tests (DynamoDB and SQS mocked by moto)
         run: poetry run pytest -q
+      - name: E2A conformance, strict (v1.3 makes R2 an error; design note V13-01)
+        run: poetry run python -m e2a.conformance --strict src
 
   contract-drift:
     runs-on: ubuntu-latest

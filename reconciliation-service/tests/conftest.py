@@ -75,3 +75,14 @@ def line(line_id: str, amount: str, reference: str = None, txn: str = None, day:
          account: str = ACCOUNT) -> BankLine:
     return BankLine(line_id=line_id, bank_txn_id=txn or f"TXN-{line_id}", value_date=date(2026, 11, day),
                     amount=Decimal(amount), currency="EUR", counterparty_account=account, reference=reference)
+
+@pytest.fixture(autouse=True)
+def no_e2a_v11_adapters():
+    """v1.3 preparation (design note V13-01): fail a test that uses E2A's v1.1 adapters, which
+    v1.3 removes. The warning is recorded, not raised: BaseAgent.run() would swallow an error."""
+    import warnings
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        yield
+    legacy = [str(w.message) for w in seen if "removed in v1.3" in str(w.message)]
+    assert not legacy, legacy
