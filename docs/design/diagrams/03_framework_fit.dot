@@ -1,0 +1,25 @@
+digraph G {
+  graph [rankdir=TB, compound=true, fontname="DejaVu Sans", fontsize=13, labelloc=t, label=<<b>How the framework family is used</b>>, fontcolor="#1F3864", nodesep=0.35, ranksep=0.6, pad=0.25];
+  node [shape=box, style="rounded,filled", fillcolor="#F4F8FC", color="#1F3864", fontname="DejaVu Sans", fontsize=10, fontcolor="#1F3864", margin="0.12,0.05"];
+  edge [color="#2E4A6B", fontname="DejaVu Sans", fontsize=9];
+  subgraph cluster_app { label=<<b>reconciliation-service (this repository)</b>>; style="rounded,filled"; fillcolor="#EAF2FA"; color="#2E75B6";
+    a1 [label="ReconciliationService · Matcher · ReconRepository\n(domain, by hand)"];
+    a2 [label="ExceptionTriageAgent\n(G2C skeleton, hooks by hand)"];
+    a3 [label="BankLineConsumer\n(IdempotentConsumer subclass)"];
+    a4 [label="generated/: nfr, observability, service; settings.py; infra/*.tf\n(A2C / P0 scaffold)"];
+  }
+  subgraph cluster_e2a { label=<<b>E2A v1.7.5 (e2a-framework)</b>>; style="rounded,filled"; fillcolor="#E6F4F5"; color="#0F7C8C"; fontcolor="#0F5C66";
+    e1 [label="BaseAgent lifecycle · IdempotentConsumer · PhysicalOutcome\nSimulatedLLMService · CircuitBreaker · RetryBudget\nidentity: ClaimMapIdentityResolver"];
+  }
+  subgraph cluster_ad { label=<<b>e2a-adapters 1.7.5 [aws]</b>>; style="rounded,filled"; fillcolor="#E6F4F5"; color="#0F7C8C"; fontcolor="#0F5C66";
+    e2 [label="DynamoDBIdempotencyStore · DynamoDBLease\nSQSLambdaBatch · SQSBroker\ningress.identity_at_ingress (aws_http_api)"];
+  }
+  subgraph cluster_mp { label=<<b>e2a-managed-providers (optional, by profile)</b>>; style="rounded,filled"; fillcolor="#F2F2F2"; color="#7F7F7F";
+    e3 [label="llm_service from a profile\n(anthropic_bedrock, ogx_aws, ...)\nproject suite runs on every profile in its CI"];
+  }
+  subgraph cluster_dsa { label=<<b>capability-oriented-dsa v0.3.0</b>>; style="rounded,filled"; fillcolor="#F2F2F2"; color="#7F7F7F";
+    d1 [label="SUBSET_SUM · GROUP_BY_KEYS · LOWER_BOUND"];
+  }
+  a2 -> e1; a3 -> e1; a1 -> e2; a3 -> e2; a1 -> d1; a4 -> e1 [style=dashed];
+  a2 -> e3 [style=dashed, xlabel="config['llm_service']"];
+}

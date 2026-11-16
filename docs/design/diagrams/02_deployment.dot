@@ -1,0 +1,22 @@
+digraph G {
+  graph [rankdir=LR, compound=true, fontname="DejaVu Sans", fontsize=13, labelloc=t, label=<<b>Deployment on AWS (infra/*.tf)</b>>, fontcolor="#1F3864", nodesep=0.35, ranksep=0.6, pad=0.25];
+  node [shape=box, style="rounded,filled", fillcolor="#F4F8FC", color="#1F3864", fontname="DejaVu Sans", fontsize=10, fontcolor="#1F3864", margin="0.12,0.05"];
+  edge [color="#2E4A6B", fontname="DejaVu Sans", fontsize=9];
+  caller [label="Caller\n(Bearer JWT)", fillcolor="#FBF3E6", color="#D4A017", fontcolor="#7A5A00"];
+  subgraph cluster_aws { label=<<b>AWS account (one stack per environment)</b>>; style="rounded,filled"; fillcolor="#EAF2FA"; color="#2E75B6";
+    api [label="API Gateway HTTP API\nJWT authorizer (when jwt_issuer set)\nGET /health open"];
+    lam [label="Lambda reconciliation-service\npython3.12, 30 s, 256 MB\nlambda_entry.handler"];
+    sqs [label="SQS queue\nvisibility 60 s"];
+    dlq [label="SQS dead-letter queue\nmaxReceiveCount 5, 14 days"];
+    eb [label="EventBridge rule\nrate(5 minutes)"];
+    ddb [label="DynamoDB table (pk, sk)\non demand, PITR, SSE, TTL"];
+    sm [label="Secrets Manager\n<name>/app"];
+    cw [label="CloudWatch Logs\n14 days"];
+  }
+  ext [label="settlement-service\n(SETTLEMENT_API_URL)", fillcolor="#E6F4F5", color="#0F7C8C", fontcolor="#0F5C66"];
+  caller -> api [xlabel="HTTPS"]; api -> lam [xlabel="AWS_PROXY 2.0"];
+  lam -> sqs [xlabel="statements"]; sqs -> lam [xlabel="batch 10,\nReportBatchItemFailures"];
+  sqs -> dlq [style=dashed, xlabel="redrive"]; lam -> dlq [style=dashed, xlabel="poison, with reason;\nschedule reconciles"];
+  eb -> lam [xlabel="aws.events"]; lam -> ddb; lam -> cw; lam -> sm [style=dotted, xlabel="read (no secret used yet)"];
+  lam -> ext [xlabel="HTTPS"];
+}

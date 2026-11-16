@@ -1,0 +1,46 @@
+@startuml
+!include ../common/style.puml
+title A bank line, from statement to MATCHED or EXCEPTION (AWS path)
+autonumber "<b>0."
+actor "Treasury\noperations" as U
+participant "API Gateway\n(JWT)" as G
+participant "FastAPI router\n(require_identity)" as R
+participant "SQS queue" as Q
+participant "Lambda handler\nSQSLambdaBatch" as L
+participant "BankLineConsumer\n(IdempotentConsumer)" as C
+participant "ReconciliationService" as S
+participant "Matcher (DSA)" as M
+participant "ReconRepository\n(DynamoDB)" as D
+participant "ExceptionTriageAgent" as A
+U -> G : POST /api/v1/statements [lines]
+G -> R : verified claims in event
+R -> Q : send_message per line
+R --> U : 202 {mode: sqs, results: QUEUED}
+Q -> L : batch (up to 10)
+L -> C : consume(batch)
+C -> D : claim(line_id) [E2A#... item]
+alt claim acquired
+  C -> S : process_line(line)
+  S -> D : add_line (attribute_not_exists)
+  S -> S : duplicate_of (DSA GROUP_BY_KEYS)
+  S -> D : open_items(account, currency)
+  S -> M : decide(line, items)
+  alt EXACT / FIFO / SUBSET
+    S -> D : match: ONE TransactWriteItems\n(items OPEN at version, line not matched)
+    S --> C : MATCHED
+  else UNMATCHED / AMBIGUOUS / DUPLICATE
+    S -> A : run(state) : proposal (never executes)
+    S -> S : validate(proposal) against current state
+    S -> D : put_exception, line status EXCEPTION
+    S --> C : EXCEPTION + stored proposal
+  end
+  C -> D : complete(claim, result)
+else duplicate delivery after success
+  C --> L : replay stored outcome (no effect)
+else claim held by a live delivery
+  C --> L : deferred (SQS redelivers after 60 s)
+else can never succeed (bad JSON, invalid line, conflict)
+  C -> Q : to DLQ with the reason
+end
+L --> Q : batchItemFailures (retried records only)
+@enduml

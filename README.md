@@ -32,6 +32,10 @@ This repository went through three stages. Each one is kept, so the path can be 
 
 **Its place in the landscape:** reads the event feed of [financial-settlement-platform](https://github.com/subhamviky/financial-settlement-platform) (its contract is vendored and checked for drift) and posts adjustments back to its ledger; [order-to-cash-agentic-ai](https://github.com/subhamviky/order-to-cash-agentic-ai) reports the open exceptions to finance users.
 
+## Design
+
+The full HLD and LLD, with diagrams and a Word copy, is in [`docs/design/`](docs/design/RECONCILIATION_DESIGN.md).
+
 ## Evidence
 
 Verified in CI (`reconciliation-ci`) on every push: the test suite (DynamoDB and SQS mocked by moto), the contract drift check, Terraform `fmt`/`validate`/`test`, and `terraform apply` + smoke test + `destroy` against a moto server. The three projects also run together in the `landscape-demo` workflow of order-to-cash-agentic-ai. This is an architecture reference implementation: it has not been deployed to an AWS account, and it makes no production claims.

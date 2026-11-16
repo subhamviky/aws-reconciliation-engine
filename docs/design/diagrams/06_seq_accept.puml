@@ -1,0 +1,46 @@
+@startuml
+!include ../common/style.puml
+title Accepting a proposal: re-validate, execute conditionally, confirm, post to the ledger
+autonumber "<b>0."
+actor Operations as U
+participant "Router" as R
+participant "ReconciliationService" as S
+participant "ReconRepository\n(DynamoDB)" as D
+participant "HttpSettlementLedger\n(breaker + retry)" as H
+participant "settlement-service\nadjustments" as X
+U -> R : POST /api/v1/exceptions/{line_id}/accept
+R -> S : accept(line_id)
+S -> D : get_exception, get_line
+S -> S : validate(stored proposal) on CURRENT state
+alt refused
+  S --> R : ProposalRejected
+  R --> U : 422 + reason
+else MATCH / MATCH_WITH_WRITE_OFF
+  S -> D : match (one transaction, version conditions)
+  alt condition lost
+    S --> R : ConcurrentChange
+    R --> U : 409 (nothing matched)
+  else committed
+    S -> D : read items back: all MATCHED? (confirm)
+    S -> D : put_exception RESOLVED (+ ledger_request if write-off > 0)
+  end
+else REFUND_DUPLICATE
+  S -> D : line REFUND_REQUESTED; exception RESOLVED + ledger_request
+else REQUEST_REMITTANCE
+  S -> D : exception WAITING_REMITTANCE
+end
+opt ledger_request present
+  S -> H : post_adjustment(Idempotency-Key recon-tenant-line)
+  H -> X : POST /api/v1/settlements/{id}/adjustments
+  alt 201
+    X --> H : adjustment
+    H --> S : POSTED
+  else 4xx
+    H --> S : REFUSED (not retried)
+  else 5xx / timeout / 409 in progress
+    H --> S : PENDING (retried by the schedule, same key)
+  end
+  S -> D : put_exception (ledger_status)
+end
+R --> U : 200 {status, resolution, ledger_status}
+@enduml
