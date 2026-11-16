@@ -39,9 +39,15 @@ def main() -> int:
     print("queued:", queued)
 
     sqs = boto3.client("sqs")
-    messages = sqs.receive_message(QueueUrl=os.environ["QUEUE_URL"], MaxNumberOfMessages=10,
-                                   WaitTimeSeconds=1).get("Messages", [])
-    event = {"Records": [{"messageId": m["MessageId"], "eventSource": "aws:sqs", "body": m["Body"]}
+    queue_url = os.environ["QUEUE_URL"]
+    queue_arn = sqs.get_queue_attributes(QueueUrl=queue_url, AttributeNames=["QueueArn"])["Attributes"]["QueueArn"]
+    messages = sqs.receive_message(QueueUrl=queue_url, MaxNumberOfMessages=10, WaitTimeSeconds=1,
+                                   AttributeNames=["ApproximateReceiveCount"],
+                                   MessageAttributeNames=["All"]).get("Messages", [])
+    # the record shape an SQS event source mapping delivers (the queue is named by eventSourceARN)
+    event = {"Records": [{"messageId": m["MessageId"], "receiptHandle": m["ReceiptHandle"], "body": m["Body"],
+                          "attributes": m.get("Attributes", {}), "messageAttributes": {},
+                          "eventSource": "aws:sqs", "eventSourceARN": queue_arn, "awsRegion": sqs.meta.region_name}
                          for m in messages]}
     print("SQS batch:", lambda_entry.handler(event, None))
 
