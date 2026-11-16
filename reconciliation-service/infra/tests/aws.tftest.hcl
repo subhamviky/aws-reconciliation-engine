@@ -66,3 +66,37 @@ run "plan_with_mocks" {
     error_message = "The setting RECON_TENANT must reach the runtime."
   }
 }
+
+run "identity_at_ingress" {
+  command = plan
+
+  variables {
+    jwt_issuer    = "https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_example"
+    jwt_audience  = ["example-client-id"]
+    required_role = "reconciler"
+  }
+
+  assert {
+    condition     = aws_apigatewayv2_authorizer.jwt[0].authorizer_type == "JWT" && aws_apigatewayv2_route.proxy.authorization_type == "JWT"
+    error_message = "With an issuer, API Gateway verifies every caller's token."
+  }
+
+  assert {
+    condition     = aws_lambda_function.app.environment[0].variables["E2A_IDENTITY_SOURCE"] == "aws_http_api" && aws_lambda_function.app.environment[0].variables["RECON_REQUIRED_ROLE"] == "reconciler"
+    error_message = "The Lambda takes the caller from the verified claims."
+  }
+
+  assert {
+    condition     = aws_apigatewayv2_route.health.authorization_type == "NONE"
+    error_message = "The liveness probe needs no token."
+  }
+}
+
+run "identity_off_without_an_issuer" {
+  command = plan
+
+  assert {
+    condition     = length(aws_apigatewayv2_authorizer.jwt) == 0 && !contains(keys(aws_lambda_function.app.environment[0].variables), "E2A_IDENTITY_SOURCE")
+    error_message = "Without an issuer (local and moto runs) identity at ingress is off."
+  }
+}
