@@ -57,6 +57,21 @@ Follows E2A Clean Architecture layers:
 - **Business logic:** Service classes (equivalent: BIMP / @Service)
 - **Exposure layer:** FastAPI APIRouter (equivalent: OData Service Binding / @RestController)
 
+## Bank lines: exactly once, and dead letters reconciled
+
+Every bank line is settled by E2A's `IdempotentConsumer` (E2A v1.7.2,
+[`services/line_consumer.py`](src/reconciliation_service/services/line_consumer.py)) under one claim
+on its `line_id`, in DynamoDB, whichever path it arrives by:
+
+| Path | How |
+|---|---|
+| SQS → Lambda | `SQSLambdaBatch` (e2a-adapters): a transient failure is reported in `batchItemFailures` and redelivered; a line that can never succeed (not JSON, invalid, a conflicting duplicate) goes to `<queue>-dlq` at once, with the reason |
+| HTTP and local runs | `ReconciliationService.reconcile(line)` settles the one line through the same consumer |
+| EventBridge schedule | `reconcile()` reads the DLQ: each line is confirmed against the repository first and replayed only if it never took effect; a poison line stays for a person |
+
+The handler is resumable (it finishes a line an earlier delivery stored), so a redelivery takes
+over a stopped invocation's claim instead of waiting for the schedule.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE)

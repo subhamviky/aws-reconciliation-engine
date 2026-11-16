@@ -119,8 +119,15 @@ resource "aws_iam_role" "app" {
 data "aws_iam_policy_document" "app" {
   statement {
     sid       = "Queue"
-    actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:SendMessage"]
+    actions   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:SendMessage", "sqs:GetQueueUrl"]
     resources = [aws_sqs_queue.main.arn]
+  }
+  # E2A's IdempotentConsumer (v1.7.2): a line that can never succeed is sent to the DLQ with the
+  # reason, and the schedule reconciles the DLQ (reads, then deletes what it settled)
+  statement {
+    sid       = "DeadLetters"
+    actions   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueUrl", "sqs:GetQueueAttributes"]
+    resources = [aws_sqs_queue.dlq.arn]
   }
   statement {
     sid       = "Logs"

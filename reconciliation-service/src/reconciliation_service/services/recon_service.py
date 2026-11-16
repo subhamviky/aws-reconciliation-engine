@@ -2,20 +2,20 @@
 cash (bank lines). Every material change goes through the repository's conditional
 writes; the triage agent only proposes, and accept() re-validates before executing.
 
-Each bank line is processed under an E2A claim in DynamoDB (e2a-adapters, design note D-02):
-a delivery whose Lambda stopped half-way is taken over by the next one, a concurrent delivery
-waits for SQS to redeliver, and a delivery after success replays the stored outcome. The
+Each bank line is settled by E2A's IdempotentConsumer under one claim on its line_id, in DynamoDB
+(services/line_consumer.py, E2A v1.7.2): a delivery whose Lambda stopped half-way is taken over
+by the next one, a concurrent delivery waits for SQS to redeliver, a delivery after success
+replays the stored outcome, and a line that can never succeed goes to the dead-letter queue,
+whose letters the schedule reconciles. The
 scheduled ledger retry runs under a DynamoDB lease, so two runs never post at once.
 """
-import hashlib
-import json
 import logging
 import os
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
-from e2a import BaseDistributedLock, BaseIdempotencyStore, ClaimStatus
+from e2a import BaseDistributedLock, BaseIdempotencyStore, InMemoryBroker
 from e2a_adapters.aws import DynamoDBIdempotencyStore, DynamoDBLease
 from e2a_simulated_llm import SimulatedLLMService
 
@@ -50,6 +50,12 @@ logger = logging.getLogger("reconciliation_service")
 # SQS redelivers (visibility timeout 60 s), so a stopped invocation's line is taken over then.
 LINE_CLAIM_LEASE_SECONDS = int(os.getenv("LINE_CLAIM_LEASE_SECONDS", "45"))
 LEDGER_RETRY_LEASE_SECONDS = int(os.getenv("LEDGER_RETRY_LEASE_SECONDS", "60"))
+
+# How the consumer settles a line: the claim lease above; the handler is resumable, so a
+# redelivery takes over a stopped invocation's claim; SQS's redrive policy (maxReceiveCount)
+# limits deliveries, not the consumer; a deferred line is visible again at once in-process.
+CONSUMER_CONFIG = {"idempotency_lease_seconds": LINE_CLAIM_LEASE_SECONDS, "consumer_resume_expired": True,
+                   "consumer_max_deliveries": 0, "consumer_retry_delay_seconds": 0}
 
 
 class ReconciliationService:
@@ -86,30 +92,30 @@ class ReconciliationService:
 
     # --------------------------------------------------- actual cash (lines)
     def reconcile(self, line: BankLine) -> Dict:
-        """Process one bank line exactly once, under an E2A claim on its line_id."""
-        fingerprint = hashlib.sha256(line.model_dump_json().encode()).hexdigest()
-        claim = self.claims.claim(line.line_id, tenant_id=self.tenant, fingerprint=fingerprint,
-                                  lease_seconds=LINE_CLAIM_LEASE_SECONDS, recover=True)
-        if claim.status == ClaimStatus.REPLAY:                       # redelivery after success: no effect
-            return {"line_id": line.line_id, "status": "ALREADY_RECEIVED", "outcome": claim.result}
-        if claim.status == ClaimStatus.IN_PROGRESS:
+        """Process one bank line exactly once (HTTP and local runs). The line is settled by the same
+        consumer as an SQS delivery, under the same claim, through an in-process broker."""
+        from .line_consumer import BankLineConsumer
+        broker = InMemoryBroker()
+        broker.publish("lines", line.model_dump(mode="json"))
+        settled = BankLineConsumer(self, broker, "lines").settle(broker.receive("lines")[0], "lines",
+                                                                CONSUMER_CONFIG)
+        decision, result = settled["decision"], _plain(settled["result"])
+        if decision == "processed":
+            return result
+        if decision == "duplicate":                                  # redelivery after success: no effect
+            return {"line_id": line.line_id, "status": "ALREADY_RECEIVED", "outcome": result}
+        if decision == "deferred":
             raise LineInProgress(f"line {line.line_id} is being processed by another delivery")
-        if claim.status != ClaimStatus.CLAIMED:                      # CONFLICT (FAILED_FINAL is never written)
-            raise LineConflict(f"line {line.line_id}: {claim.status.value}, the same id with different content")
-        try:
-            result = self._reconcile(line)
-        except Exception:
-            self.claims.fail(line.line_id, retryable=True, tenant_id=self.tenant, owner=claim.owner)
-            raise
-        if not self.claims.complete(line.line_id, json.loads(json.dumps(result, default=str)),
-                                    tenant_id=self.tenant, owner=claim.owner):
-            logger.warning("line %s: claim taken over before completion; the writes were conditional", line.line_id)
-        return result
+        if settled["error"] is not None:                             # retried or dead-lettered by the handler
+            raise settled["error"]
+        raise LineConflict(f"line {line.line_id}: {settled['reason']}, the same id with different content")
 
-    def _reconcile(self, line: BankLine) -> Dict:
+    def process_line(self, line: BankLine) -> Dict:
+        """The effect of one bank line, without the claim (the consumer holds it). Resumable: a line
+        an earlier delivery stored is finished from its stored status, never processed twice."""
         if not self.repo.add_line(self.tenant, line):
             # Stored by an earlier delivery whose invocation stopped: resume from the stored status.
-            done = self._outcome_of(line.line_id)
+            done = self.outcome_of(line.line_id)
             if done is not None:
                 return done
         existing = self.repo.lines(self.tenant)
@@ -126,7 +132,7 @@ class ReconciliationService:
         return self._exception(line, kind, decision.reason or "matched items changed concurrently",
                                self.matcher.nearest(line.amount, items))
 
-    def _outcome_of(self, line_id: str) -> Optional[Dict]:
+    def outcome_of(self, line_id: str) -> Optional[Dict]:
         """The outcome an earlier delivery already wrote, or None if it stopped before deciding."""
         stored = self.repo.get_line(self.tenant, line_id) or {}
         if stored.get("status") == "MATCHED":
@@ -251,3 +257,10 @@ class ReconciliationService:
     def exceptions(self, status: Optional[str] = None) -> List[ExceptionCase]:
         cases = self.repo.exceptions(self.tenant)
         return [c for c in cases if status is None or c.status == status]
+
+
+def _plain(result: Optional[Dict]) -> Optional[Dict]:
+    """A stored claim result without the consumer's physical_success flag."""
+    if result is None:
+        return None
+    return {k: v for k, v in result.items() if k != "physical_success"}
