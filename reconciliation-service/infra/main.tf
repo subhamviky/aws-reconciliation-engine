@@ -157,7 +157,7 @@ resource "aws_lambda_function" "app" {
   timeout       = 30
   memory_size   = 256
   environment {
-    variables = {
+    variables = merge(local.identity_env, {
       QUEUE_URL   = aws_sqs_queue.main.url
       SECRET_ARN  = aws_secretsmanager_secret.app.arn
       ENVIRONMENT = var.environment
@@ -165,7 +165,7 @@ resource "aws_lambda_function" "app" {
       TABLE_NAME         = aws_dynamodb_table.recon.name
       SETTLEMENT_API_URL = var.setting_settlement_api_url
       RECON_TENANT       = var.setting_recon_tenant
-    }
+    })
   }
   depends_on = [aws_cloudwatch_log_group.app]
   tags       = local.tags
@@ -196,6 +196,9 @@ resource "aws_apigatewayv2_route" "proxy" {
   api_id    = aws_apigatewayv2_api.http.id
   route_key = "ANY /{proxy+}"
   target    = "integrations/${aws_apigatewayv2_integration.app.id}"
+  # identity.tf: with jwt_issuer set, every route but /health requires a verified token
+  authorization_type = local.identity_on ? "JWT" : "NONE"
+  authorizer_id      = local.identity_on ? aws_apigatewayv2_authorizer.jwt[0].id : null
 }
 
 resource "aws_apigatewayv2_stage" "default" {

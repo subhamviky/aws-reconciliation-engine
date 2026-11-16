@@ -1,12 +1,15 @@
-"""HTTP surface of the reconciliation engine (API Gateway -> Lambda via Mangum)."""
+"""HTTP surface of the reconciliation engine (API Gateway -> Lambda via Mangum). Every route
+requires the identity API Gateway verified when identity at ingress is on (routers/identity.py)."""
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..models.records import BankLine, ExceptionCase
 from ..services.recon_service import ConcurrentChange, ProposalRejected
 
-router = APIRouter(prefix="/api/v1")
+from .identity import require_identity
+
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_identity)])
 
 
 @router.post("/statements", status_code=202)

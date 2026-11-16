@@ -72,6 +72,18 @@ on its `line_id`, in DynamoDB, whichever path it arrives by:
 The handler is resumable (it finishes a line an earlier delivery stored), so a redelivery takes
 over a stopped invocation's claim instead of waiting for the schedule.
 
+## Who may call the API: identity at ingress
+
+With `jwt_issuer` set in Terraform (a Cognito user pool, for example), API Gateway's JWT authorizer verifies every caller's token, and every route except `/health` requires one. The Lambda then takes the caller from the verified claims (`E2A_IDENTITY_SOURCE=aws_http_api`). e2a-adapters reads the claims from the event, and E2A's `ClaimMapIdentityResolver` resolves them with the Cognito preset: the tenant is `custom:tenant_id`, the roles are `cognito:groups`.
+
+| Case | Response |
+|---|---|
+| The claims name another tenant than this deployment's `RECON_TENANT` | 403 |
+| The caller lacks `required_role`, when one is set | 403 |
+| No verified claims | 401 |
+
+Without `jwt_issuer`, for local and moto runs, the API is open, as before. See `routers/identity.py` and `infra/identity.tf`.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE)
