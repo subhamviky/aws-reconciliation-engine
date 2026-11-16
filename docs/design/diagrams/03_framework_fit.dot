@@ -1,5 +1,5 @@
 digraph G {
-  graph [rankdir=TB, compound=true, fontname="DejaVu Sans", fontsize=13, labelloc=t, label=<<b>How the framework family is used</b>>, fontcolor="#1F3864", nodesep=0.35, ranksep=0.6, pad=0.25];
+  graph [rankdir=LR, compound=true, fontname="DejaVu Sans", fontsize=13, labelloc=t, label=<<b>How the framework family is used</b>>, fontcolor="#1F3864", nodesep=0.35, ranksep=0.6, pad=0.25];
   node [shape=box, style="rounded,filled", fillcolor="#F4F8FC", color="#1F3864", fontname="DejaVu Sans", fontsize=10, fontcolor="#1F3864", margin="0.12,0.05"];
   edge [color="#2E4A6B", fontname="DejaVu Sans", fontsize=9];
   subgraph cluster_app { label=<<b>reconciliation-service (this repository)</b>>; style="rounded,filled"; fillcolor="#EAF2FA"; color="#2E75B6";
