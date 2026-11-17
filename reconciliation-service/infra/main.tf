@@ -157,7 +157,7 @@ resource "aws_lambda_function" "app" {
   timeout       = 30
   memory_size   = 256
   environment {
-    variables = merge(local.identity_env, {
+    variables = merge(local.identity_env, local.workload_env, { # workload.tf: service identity (SI-01)
       QUEUE_URL   = aws_sqs_queue.main.url
       SECRET_ARN  = aws_secretsmanager_secret.app.arn
       ENVIRONMENT = var.environment

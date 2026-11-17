@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ..models.records import BankLine, ExceptionCase
 from ..services.recon_service import ConcurrentChange, ProposalRejected
 
-from .identity import require_identity
+from .identity import require_identity, service_identity
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_identity)])
 
@@ -51,3 +51,14 @@ def accept_proposal(line_id: str, request: Request) -> dict:
         raise HTTPException(status_code=422, detail=str(e))
     except ConcurrentChange as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+
+# Service callers (hub design note SI-01): o2c-agent-service reads open exceptions here, with an
+# Entra token API Gateway verified (a separate authorizer from the users' one).
+service_router = APIRouter(prefix="/service/v1")
+
+
+@service_router.get("/exceptions", response_model=List[ExceptionCase],
+                    dependencies=[Depends(service_identity("reconciliation.read"))])
+def list_exceptions_for_services(request: Request, status: Optional[str] = None) -> List[ExceptionCase]:
+    return request.app.state.recon_service.exceptions(status)

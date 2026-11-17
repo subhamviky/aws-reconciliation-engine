@@ -11,6 +11,8 @@ from decimal import Decimal
 from typing import Dict, Protocol
 
 import httpx
+
+from .settlement_client import auth_headers
 from e2a_base import CircuitBreaker, RetryBudget
 
 from ..generated.nfr import call_with_resilience
@@ -25,7 +27,8 @@ class SettlementLedger(Protocol):
 
 
 class HttpSettlementLedger:
-    def __init__(self, base_url: str, timeout: float = 5.0, transport=None) -> None:
+    def __init__(self, base_url: str, timeout: float = 5.0, transport=None, credentials=None) -> None:
+        self._base, self._credentials = base_url.rstrip("/"), credentials      # SI-01: see settlement_client
         self._http = httpx.Client(base_url=base_url, timeout=timeout, transport=transport)
         self._breaker = CircuitBreaker(failure_threshold=5, reset_seconds=30.0)
         self._budget = RetryBudget()
@@ -34,8 +37,9 @@ class HttpSettlementLedger:
         body = {k: request[k] for k in ("type", "amount", "reason", "reference")}
 
         def call() -> httpx.Response:
-            r = self._http.post(f"/api/v1/settlements/{request['settlement_id']}/adjustments", json=body,
-                                headers={"X-Tenant-Id": tenant_id, "Idempotency-Key": request["key"]})
+            path = f"/api/v1/settlements/{request['settlement_id']}/adjustments"
+            r = self._http.post(path, json=body, headers={"X-Tenant-Id": tenant_id, "Idempotency-Key": request["key"],
+                                                          **auth_headers(self._credentials, self._base + path)})
             if r.status_code >= 500 or (r.status_code == 409 and "in progress" in r.text):
                 raise RuntimeError(f"settlement-service answered {r.status_code}")   # not definitive
             return r
