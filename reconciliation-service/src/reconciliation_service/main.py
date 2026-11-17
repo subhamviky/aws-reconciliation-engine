@@ -3,9 +3,10 @@ import logging
 import os
 
 import boto3
+from e2a_adapters.workload import workload_credentials
 from fastapi import FastAPI
 
-from .routers.recon import router as recon_router
+from .routers.recon import router as recon_router, service_router
 from .services.llm import build_triage_llm
 from .services.queue import DirectLineQueue, SqsLineQueue
 from .services.recon_service import ReconciliationService
@@ -21,12 +22,13 @@ def build_service() -> ReconciliationService:
     region = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "eu-west-1"))
     table = boto3.resource("dynamodb", region_name=region).Table(os.getenv("TABLE_NAME", "reconciliation"))
     settlement_url = os.getenv("SETTLEMENT_API_URL", "http://localhost:8080")
+    credentials = workload_credentials()      # SI-01: this service's own token to settlement-service; None unless configured
     return ReconciliationService(
         repo=ReconRepository(table),
-        feed=HttpSettlementFeed(settlement_url),
+        feed=HttpSettlementFeed(settlement_url, credentials=credentials),
         llm=build_triage_llm(),
         tenant_id=os.getenv("RECON_TENANT", "acme"),
-        ledger=HttpSettlementLedger(settlement_url),
+        ledger=HttpSettlementLedger(settlement_url, credentials=credentials),
     )
 
 
@@ -37,6 +39,7 @@ def build_app(service: ReconciliationService) -> FastAPI:
     app.state.line_queue = (SqsLineQueue(boto3.client("sqs"), queue_url) if queue_url
                             else DirectLineQueue(service.reconcile))
     app.include_router(recon_router)
+    app.include_router(service_router)
 
     @app.get("/health")
     def health() -> dict[str, str]:

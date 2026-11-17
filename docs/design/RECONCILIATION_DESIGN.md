@@ -9,7 +9,7 @@
 | Project | `aws-reconciliation-engine` — service `reconciliation-service` |
 | Document type | Design Document (HLD + LLD) |
 | Author | Subham Gupta, Principal Platform Architect |
-| Source baseline | `subhamviky/aws-reconciliation-engine` `main` at `5d3a5f4`: `reconciliation-service/src` (18 modules with code, about 1,300 lines), `infra/*.tf`, `contracts/`, 11 test modules. Frameworks: E2A `v1.7.5` (`e2a-framework`), `e2a-adapters` 1.7.5 `[aws]`, `capability-oriented-dsa` `v0.3.0` |
+| Source baseline | `subhamviky/aws-reconciliation-engine` `main` at `5d3a5f4`: `reconciliation-service/src` (18 modules with code, about 1,300 lines), `infra/*.tf`, `contracts/`, 12 test modules. Frameworks: E2A `v1.8.0` (`e2a-framework`), `e2a-adapters` 1.8.0 `[aws]`, `capability-oriented-dsa` `v0.3.0` |
 | Date | 16 November 2026 |
 | Status | Describes the code on `main`. Section 14 lists where the code and the original requirements differ. |
 
@@ -228,7 +228,11 @@ The timings fit together:
 
 - **Callers.** With `jwt_issuer` set, API Gateway verifies the JWT. The Lambda then reads the verified claims from the event (`identity_at_ingress`, source `aws_http_api`, Cognito claim preset), requires that they name this deployment's tenant (`RECON_TENANT`), and optionally a role (`RECON_REQUIRED_ROLE`). The result: no verified claims is 401, another tenant or a missing role is 403. `GET /health` stays open. Without `jwt_issuer`, identity is off; that is for local and moto runs only.
 - **The service's own access.** The Lambda role's least-privilege policy covers this queue and its DLQ, its log group, its secret and its table.
-- **Calls to settlement-service** carry `X-Tenant-Id` and no service credential (Section 14).
+- **Service callers** (hub design note SI-01). o2c-agent-service reads open exceptions on `GET /service/v1/exceptions`, a route with its own JWT authorizer (`service_jwt_issuer`: the landscape's Entra directory; audience: the reconciliation app). The users' Cognito authorizer keeps every other route.
+  - **What the Lambda checks** (`service_identity`): the claims, with the `entra_service` preset and only that issuer trusted (`RECON_SERVICE_TRUSTED_ISSUERS`).
+  - **What it requires:** `X-Tenant-Id` must be this deployment's tenant and granted to the caller (app role `tenant:<id>`), and the caller must hold `reconciliation.read`.
+  - **Separation:** a service token on a user route names no tenant there and is refused. Without a service issuer, a deployment that verifies users has no service route at all.
+- **Calls to settlement-service** carry this service's own token. The Lambda role gets a web identity token from STS (IAM outbound identity federation, `sts:GetWebIdentityToken`) and exchanges it for an Entra token for the settlement app (`e2a_adapters.workload`). The Entra apps, roles and grants are in financial-settlement-platform's `landscape-identity/`: reconciliation may adjust and read.
 
 ### 5.7 Model access
 
@@ -438,6 +442,8 @@ All `/api/v1` routes depend on `require_identity`: 401 or 403 when identity is c
 | `SETTLEMENT_API_URL` | Terraform variable | `http://settlement-service.internal:8080` (Terraform), `http://localhost:8080` (code) | Feed and ledger clients |
 | `RECON_TENANT` | Terraform variable | `acme` | The deployment's tenant |
 | `E2A_IDENTITY_SOURCE`, `E2A_IDENTITY_TRUSTED_ISSUERS`, `RECON_REQUIRED_ROLE` | `identity.tf` when `jwt_issuer` is set | off | `require_identity` |
+| `RECON_SERVICE_TRUSTED_ISSUERS` (and `E2A_IDENTITY_SOURCE`) | `workload.tf` when `service_jwt_issuer` is set | off | `service_identity` (SI-01) |
+| `E2A_WORKLOAD_IDENTITY=aws`, `E2A_WORKLOAD_AWS_REGION`, `E2A_WORKLOAD_ENTRA_TENANT`, `E2A_WORKLOAD_ENTRA_CLIENT_ID`, `E2A_WORKLOAD_TOKEN_SCOPES` | `workload.tf` when `entra_directory_id`, `entra_client_id` and `settlement_scope` are set | no token | Calls to settlement-service (SI-01) |
 | `E2A_IDENTITY_CLAIM_MAP` | environment | Cognito preset | `require_identity` |
 | `LINE_CLAIM_LEASE_SECONDS`, `LEDGER_RETRY_LEASE_SECONDS` | environment | 45, 60 | Claim and lease |
 | `poll_schedule`, `max_receive_count`, `jwt_issuer`, `jwt_audience`, `required_role` | Terraform variables | `rate(5 minutes)`, 5, empty | Infrastructure |
@@ -447,7 +453,7 @@ All `/api/v1` routes depend on `require_identity`: 401 or 403 when identity is c
 
 | Evidence | What it proves |
 |---|---|
-| `tests/` (48 test functions, 50 cases when run; DynamoDB and SQS mocked by moto) | Matching, duplicates, the full flow, accept races, ledger postings and retries, line claims (stopped invocations, concurrent deliveries), the Lambda handler (batch, poison, schedule, DLQ), identity at ingress, contracts, settings |
+| `tests/` (55 test functions, 57 cases when run; DynamoDB and SQS mocked by moto) | Matching, duplicates, the full flow, accept races, ledger postings and retries, line claims (stopped invocations, concurrent deliveries), the Lambda handler (batch, poison, schedule, DLQ), identity at ingress, contracts, settings |
 | CI `reconciliation-service` | The tests, and E2A's conformance check in strict mode |
 | CI `contract-drift` | The vendored settlement contract equals the producer's `main` |
 | CI `terraform` | `fmt`, `validate`, `terraform test` with a mock provider |
@@ -462,8 +468,9 @@ Acceptance criteria AC-1 to AC-18 of the requirements each map to a named test o
 |---|---|---|---|
 | G-1 | The A2C `generated/observability.py` (JSON logs, metrics, tracing, SLO checker) is not called by the app | Gap | Logging is the standard library's; wire `configure_logging` and `traced` in `main.py` and the handler |
 | G-2 | `settings.load_settings()` is declared and tested but `main.py` reads the environment directly, with its own defaults | Gap | `TABLE_NAME` is declared required, yet the code defaults it to `reconciliation` |
-| G-3 | Calls to settlement-service carry `X-Tenant-Id` only, without a service credential | Gap | Add a token (for example from the secret already provisioned) or private networking |
-| G-4 | A Secrets Manager secret is provisioned and `SECRET_ARN` set, but no secret is read | Note | Ready for G-3 |
+| G-3 | Calls to settlement-service carried `X-Tenant-Id` only, without a service credential | Fixed (SI-01) | An Entra token from the role's STS web identity token, no secret (Section 5.6). Not yet run against live clouds. |
+| G-4 | A Secrets Manager secret is provisioned and `SECRET_ARN` set, but no secret is read | Note | G-3 needed no secret; remove it, or keep it for a future credential |
+| G-6 | O2C's exception query used the user route, which a deployment with `jwt_issuer` refuses without a user token | Fixed (SI-01) | The service route `/service/v1/exceptions` |
 | G-5 | `duplicate_of` reads every line of the tenant for each new line | Scale limit | Index payment keys (for example a key item per bank transaction id) for large volumes |
 | D-1 | BR-7 names DSA `KNAPSACK_01` + `SUBSETS` with a 1,000 enumeration limit; the code uses `SUBSET_SUM` with `max_nodes` 10,000 | Deviation | DSA v0.3 provides the combined operation with an explicit `complete` flag |
 | D-2 | Requirements list ledger posting and authentication as out of scope | Done since | Implemented (Sections 8.1, 5.6) |
