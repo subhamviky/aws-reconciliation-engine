@@ -1,0 +1,19 @@
+digraph G {
+  graph [rankdir=LR, compound=true, fontname="DejaVu Sans", fontsize=13, labelloc=t, label=<<b>Reconciliation engine: system context</b>>, fontcolor="#1F3864", nodesep=0.35, ranksep=0.6, pad=0.25];
+  node [shape=box, style="rounded,filled", fillcolor="#F4F8FC", color="#1F3864", fontname="DejaVu Sans", fontsize=10, fontcolor="#1F3864", margin="0.12,0.05"];
+  edge [color="#2E4A6B", fontname="DejaVu Sans", fontsize=9];
+  ops [label="Treasury operations\n(review and accept)", shape=box, fillcolor="#FBF3E6", color="#D4A017", fontcolor="#7A5A00"];
+  bank [label="Bank statement\n(lines as JSON)", fillcolor="#FBF3E6", color="#D4A017", fontcolor="#7A5A00"];
+  idp [label="Identity provider\n(Cognito user pool, JWT)", fillcolor="#FBF3E6", color="#D4A017", fontcolor="#7A5A00"];
+  subgraph cluster_r { label=<<b>aws-reconciliation-engine (AWS)</b>>; style="rounded,filled"; fillcolor="#EAF2FA"; color="#2E75B6";
+    svc [label="reconciliation-service\nexpected cash vs actual cash"];
+  }
+  subgraph cluster_s { label=<<b>financial-settlement-platform (Azure)</b>>; style="rounded,filled"; fillcolor="#E6F4F5"; color="#0F7C8C"; fontcolor="#0F5C66";
+    feed [label="settlement-service\nGET /api/v1/events (feed)"];
+    ledger [label="settlement-service\nPOST .../adjustments (ledger)"];
+  }
+  model [label="Model (optional)\nSimulatedLLMService by default;\nmanaged providers by profile", fillcolor="#F2F2F2", color="#7F7F7F"];
+  bank -> svc [xlabel="POST /statements"]; ops -> svc [xlabel="exceptions, accept"]; idp -> svc [style=dashed, xlabel="verified token"];
+  svc -> feed [xlabel="poll (expected cash)"]; svc -> ledger [xlabel="write-offs, refunds"];
+  svc -> model [style=dashed, xlabel="triage proposal"];
+}

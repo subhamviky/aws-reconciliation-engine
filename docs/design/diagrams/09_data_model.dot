@@ -1,0 +1,11 @@
+digraph G {
+  graph [rankdir=LR, compound=true, fontname="DejaVu Sans", fontsize=13, labelloc=t, label=<<b>One DynamoDB table: item types and keys</b>>, fontcolor="#1F3864", nodesep=0.35, ranksep=0.6, pad=0.25];
+  node [shape=record, style="filled", fillcolor="#F4F8FC", color="#1F3864", fontname="DejaVu Sans", fontsize=10, fontcolor="#1F3864"];
+  edge [color="#2E4A6B", fontname="DejaVu Sans", fontsize=9];
+  open [label="{Open item (expected cash)|pk OPEN#tenant#account\lsk ITEM#settlement_id\l|amount, currency, settled_at\lstatus OPEN · MATCHED\lversion, matched_line\l}"];
+  line [label="{Bank line (actual cash)|pk LINE#tenant\lsk line_id\l|bank_txn_id, value_date, amount, currency\lcounterparty_account, reference\lstatus, match_type, matched_settlements, write_off\l}"];
+  exc [label="{Exception case|pk EXC#tenant\lsk line_id\l|kind, detail, candidates, duplicate_of\lagent_proposal, agent_proposal_valid, validation_reason\lproposal, status, resolution\lledger_request, ledger_status, ledger_detail\l}"];
+  cur [label="{Feed cursor|pk CURSOR#tenant\lsk settlement-feed\l|position (moves forward only)\l}"];
+  e2a [label="{E2A ports (e2a-adapters)|pk E2A#... (claims per line_id)\lpk E2A#... (lease ledger-retry#tenant)\l|state, owner, expires_at, result\l}"];
+  line -> open [xlabel="matched_settlements"]; exc -> line [xlabel="same line_id"]; exc -> open [xlabel="candidates, proposal"];
+}

@@ -1,0 +1,29 @@
+@startuml
+!include ../common/style.puml
+title States of a bank line, an open item, an exception and a ledger posting
+state "Bank line" as BL {
+  [*] --> RECEIVED
+  RECEIVED --> MATCHED : automatic match
+  RECEIVED --> EXCEPTION : no match / duplicate
+  EXCEPTION --> MATCHED : accepted MATCH(_WITH_WRITE_OFF)
+  EXCEPTION --> REFUND_REQUESTED : accepted REFUND_DUPLICATE
+}
+state "Open item" as OI {
+  [*] --> OPEN
+  OPEN --> MATCHED_ : matched (version + 1)
+  state "MATCHED" as MATCHED_
+}
+state "Exception case" as EC {
+  [*] --> OPEN_E
+  state "OPEN" as OPEN_E
+  OPEN_E --> RESOLVED : MATCH, write-off, refund
+  OPEN_E --> WAITING_REMITTANCE : REQUEST_REMITTANCE
+}
+state "Ledger posting" as LP {
+  [*] --> PENDING
+  [*] --> POSTED
+  [*] --> REFUSED
+  PENDING --> POSTED : schedule retry (same key)
+  PENDING --> REFUSED
+}
+@enduml

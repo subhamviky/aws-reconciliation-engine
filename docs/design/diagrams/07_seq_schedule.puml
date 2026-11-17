@@ -1,0 +1,40 @@
+@startuml
+!include ../common/style.puml
+title The schedule (EventBridge, every 5 minutes): expected cash, ledger retries, dead letters
+autonumber "<b>0."
+participant "EventBridge" as E
+participant "Lambda handler" as L
+participant "ReconciliationService" as S
+participant "DynamoDB" as D
+participant "settlement-service" as X
+participant "BankLineConsumer\n(reconcile)" as C
+participant "SQS DLQ" as Q
+E -> L : event source aws.events
+L -> S : poll_settlements()
+S -> D : get_cursor(tenant)
+S -> X : GET /api/v1/events?afterSequence=n (breaker + retry)
+loop each settlement.completed
+  S -> D : add_open_item (attribute_not_exists): once per settlement_id
+end
+S -> D : advance_cursor(old, new) (conditional)
+L -> S : retry_ledger_postings()
+S -> D : acquire lease ledger-retry#tenant (60 s)
+alt lease held elsewhere
+  S --> L : 0 (posts nothing)
+else acquired
+  loop each PENDING posting
+    S -> X : POST adjustments (same Idempotency-Key)
+  end
+  S -> D : release lease
+end
+L -> C : reconcile(dlq) under the lease
+loop each dead letter
+  C -> S : outcome_of(line_id) (confirm)
+  alt took effect
+    C -> Q : delete (nothing to do)
+  else never took effect
+    C -> C : replay through the consumer
+  end
+end
+L --> E : {ingested, ledger_posted, dead_letters}
+@enduml

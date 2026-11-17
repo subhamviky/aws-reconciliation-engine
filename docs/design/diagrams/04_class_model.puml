@@ -1,0 +1,64 @@
+@startuml
+!include ../common/style.puml
+title reconciliation-service: class model (main classes)
+package "e2a / e2a_adapters / DSA (installed)" #F7F7F7 {
+  abstract class BaseAgent <<E2A>>
+  abstract class IdempotentConsumer <<E2A>>
+  class SimulatedLLMService <<E2A>>
+  class DynamoDBIdempotencyStore <<e2a-adapters>>
+  class DynamoDBLease <<e2a-adapters>>
+  class SQSLambdaBatch <<e2a-adapters>>
+  class DSAFacade <<DSA>>
+}
+class ReconciliationService {
+  +poll_settlements(): int
+  +ingest_settlement_event(event): bool
+  +reconcile(line): dict
+  +process_line(line): dict
+  +outcome_of(line_id): dict?
+  +validate(line, case, proposal): (bool, str)
+  +accept(line_id): dict
+  +retry_ledger_postings(): int
+  +exceptions(status?): list
+}
+class Matcher {
+  +decide(line, items): MatchDecision
+  +nearest(amount, items, count): list
+}
+class ReconRepository {
+  +add_open_item / open_items / get_open_item
+  +add_line / get_line / lines / set_line_status
+  +match(tenant, line, items, type, write_off): bool
+  +put_exception / get_exception / exceptions
+  +get_cursor / advance_cursor(old, new): bool
+}
+class ExceptionTriageAgent {
+  _build_messages(state, ctx)
+  _apply_policy(state, ctx)
+  _evaluate_output(response, state, ctx): float
+  _fallback(state, ctx)
+  _handle_error(error, state, ctx)
+}
+class BankLineConsumer {
+  _tenant_of / _idempotency_key
+  _handle(message, ...): dict
+  _confirm(message): PhysicalOutcome
+}
+class HttpSettlementFeed
+class HttpSettlementLedger
+class "BankLine / OpenItem\nProposal / ExceptionCase" as Records <<pydantic>>
+BaseAgent <|-- ExceptionTriageAgent
+IdempotentConsumer <|-- BankLineConsumer
+ReconciliationService --> ReconRepository
+ReconciliationService --> Matcher
+ReconciliationService --> ExceptionTriageAgent
+ReconciliationService --> HttpSettlementFeed
+ReconciliationService --> HttpSettlementLedger
+ReconciliationService --> DynamoDBIdempotencyStore : claims
+ReconciliationService --> DynamoDBLease : lease
+ReconciliationService ..> SimulatedLLMService : config['llm_service']
+BankLineConsumer --> ReconciliationService : process_line / outcome_of
+BankLineConsumer ..> SQSLambdaBatch : source in Lambda
+Matcher --> DSAFacade
+ReconRepository ..> Records
+@enduml
