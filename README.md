@@ -34,7 +34,7 @@ This repository went through three stages. Each one is kept, so the path can be 
 
 ## Design
 
-The full HLD and LLD, with diagrams and a Word copy, is in [`docs/design/`](docs/design/RECONCILIATION_DESIGN.md).
+The full HLD and LLD, with diagrams and a PDF copy, is in [`docs/design/`](docs/design/RECONCILIATION_DESIGN.md).
 
 ## Evidence
 
