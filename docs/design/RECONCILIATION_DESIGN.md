@@ -9,8 +9,8 @@
 | Project | `aws-reconciliation-engine` — service `reconciliation-service` |
 | Document type | Design Document (HLD + LLD) |
 | Author | Subham Gupta, Principal Platform Architect |
-| Source baseline | `subhamviky/aws-reconciliation-engine` `main` at `5d3a5f4`: `reconciliation-service/src` (18 modules with code, about 1,300 lines), `infra/*.tf`, `contracts/`, 12 test modules. Frameworks: E2A `v1.8.0` (`e2a-framework`), `e2a-adapters` 1.8.0 `[aws]`, `capability-oriented-dsa` `v0.3.0` |
-| Date | 16 November 2026 |
+| Source baseline | `subhamviky/aws-reconciliation-engine` `main` at `5d3a5f4`: `reconciliation-service/src` (18 modules with code, about 1,300 lines), `infra/*.tf`, `contracts/`, 12 test modules. Frameworks: E2A `v1.9.1` (`e2a-framework`), `e2a-adapters` 1.9.1 `[aws]`, `capability-oriented-dsa` `v0.3.0` |
+| Date | 21 November 2026 (E2A v1.9.1; first issue 16 November 2026) |
 | Status | Describes the code on `main`. Section 14 lists where the code and the original requirements differ. |
 
 ## 1. Introduction
