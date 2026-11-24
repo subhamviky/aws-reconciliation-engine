@@ -4,13 +4,15 @@
 > lines are matched against completed settlements with deterministic, bounded algorithms; what
 > cannot be matched becomes an exception that an AI agent triages and deterministic rules decide.
 
+> **Renamed** from `aws-reconciliation-engine` on 24 November 2026: the engine is cloud-neutral (AWS today; a Google Cloud profile is being added, hub design note GCP-01). The state before the change is tagged `pre-gcp-2026`. Old URLs redirect.
+
 ## From spike to frameworks to project
 
 This repository went through three stages. Each one is kept, so the path can be followed.
 
 | Stage | Where | What happened |
 |---|---|---|
-| **1. Architectural spike** | branch [`spike/v1-original`](https://github.com/subhamviky/aws-reconciliation-engine/tree/spike/v1-original) (tag `spike-v1`) | A serverless spike on AWS (API Gateway, Lambda, SQS, DynamoDB) testing idempotent asynchronous processing, with an agentic layer (LangGraph, Bedrock RAG) planned on top. The serverless patterns held; the open question was how an agent could act on financial records without being trusted with them. |
+| **1. Architectural spike** | branch [`spike/v1-original`](https://github.com/subhamviky/payment-reconciliation-engine/tree/spike/v1-original) (tag `spike-v1`) | A serverless spike on AWS (API Gateway, Lambda, SQS, DynamoDB) testing idempotent asynchronous processing, with an agentic layer (LangGraph, Bedrock RAG) planned on top. The serverless patterns held; the open question was how an agent could act on financial records without being trusted with them. |
 | **2. Frameworks** | [E2A](https://github.com/subhamviky/e2a-framework) · [A2C · G2C · P0](https://github.com/subhamviky/a2c-framework) · [Capability-Oriented DSA](https://github.com/subhamviky/capability-oriented-dsa) | The answer became E2A's rule (*probabilistic intelligence proposes; deterministic controls authorize, execute and confirm*); bounded, governed algorithms became Capability-Oriented DSA; scaffolding became the AI-DLC pipeline. |
 | **3. Completed project** | **`main`** (this branch) | The spike rebuilt by **consuming** those frameworks: scaffolded by the AI-DLC pipeline, matching on governed DSA calls, exception triage on an E2A agent. |
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/subhamviky/aws-reconciliation-engine/contracts/statements/bank-statement-line.v1.schema.json",
+  "$id": "https://github.com/subhamviky/payment-reconciliation-engine/contracts/statements/bank-statement-line.v1.schema.json",
   "title": "Bank statement line v1",
-  "description": "One credit on a bank statement, as accepted by POST /api/v1/statements (a JSON array of lines). Owned by aws-reconciliation-engine.",
+  "description": "One credit on a bank statement, as accepted by POST /api/v1/statements (a JSON array of lines). Owned by payment-reconciliation-engine.",
   "type": "object",
   "additionalProperties": false,
   "required": ["line_id", "bank_txn_id", "value_date", "amount", "currency", "counterparty_account"],
