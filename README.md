@@ -38,7 +38,7 @@ The same service runs on Google Cloud next to AWS; the cloud is chosen by config
 | Schedule | EventBridge → Lambda | Cloud Scheduler → `POST /jobs/scheduled` |
 | Compute | Lambda | Cloud Run, scale to zero, one instance |
 
-`RECON_STATE_BACKEND=firestore` selects Firestore; `PUBSUB_LINES_TOPIC` and `GOOGLE_CLOUD_PROJECT` select Pub/Sub. The values for a deployment are placeholders in [`deploy/gcp/binding.env`](deploy/gcp/binding.env) until the cloud account exists. CI runs every test a second time on the Firestore emulator and plans `infra/gcp` against a mock provider.
+`RECON_STATE_BACKEND=firestore` selects Firestore; `PUBSUB_LINES_TOPIC` and `GOOGLE_CLOUD_PROJECT` select Pub/Sub. The values for a deployment are placeholders in [`deploy/gcp/binding.vars`](deploy/gcp/binding.vars) until the cloud account exists. CI runs every test a second time on the Firestore emulator and plans `infra/gcp` against a mock provider.
 
 ## The project
 
