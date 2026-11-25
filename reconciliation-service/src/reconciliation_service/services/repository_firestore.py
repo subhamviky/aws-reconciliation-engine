@@ -32,6 +32,11 @@ from ..models.records import BankLine, ExceptionCase, OpenItem
 CONTENDED_ROUNDS = 8
 
 
+def _is_lost_commit(error: Exception) -> bool:
+    from google.api_core.exceptions import Aborted, Conflict
+    return isinstance(error, (Aborted, Conflict)) or (isinstance(error, ValueError) and "commit" in str(error).lower())
+
+
 def _contended(attempt, rounds: int = CONTENDED_ROUNDS, sleep=time.sleep):
     """Run attempt() again after a jittered pause when its transaction could not commit."""
     from google.api_core.exceptions import Aborted, Conflict
@@ -126,7 +131,24 @@ class FirestoreReconRepository:
                                           "write_off": str(write_off)})
             return True
 
-        return _contended(lambda: run(self.client.transaction()))
+        try:
+            return _contended(lambda: run(self.client.transaction()))
+        except Exception as contention:
+            if not _is_lost_commit(contention):
+                raise
+            # Every attempt lost its lock race. If the winner has committed, this match lost: say so (it may
+            # need a moment to be visible).
+            for look in range(6):
+                snaps = [ref.get() for ref in item_refs]
+                taken = any(not (snap.exists and (snap.to_dict() or {}).get("status") == "OPEN"
+                                 and int((snap.to_dict() or {}).get("version", 0)) == item.version)
+                            for item, snap in zip(items, snaps))
+                line_snap = line_ref.get()
+                done = not line_snap.exists or (line_snap.to_dict() or {}).get("status") not in ("RECEIVED", "EXCEPTION")
+                if taken or done:
+                    return False
+                time.sleep(0.25 * (look + 1))
+            raise                                            # still open: not a lost race; the message is redelivered
 
     # ------------------------------------------------------------ exceptions
     def put_exception(self, tenant: str, case: ExceptionCase) -> None:

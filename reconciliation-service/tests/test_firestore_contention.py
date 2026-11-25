@@ -38,3 +38,30 @@ def test_a_real_error_is_not_retried():
     with pytest.raises(ValueError, match="bad document"):
         _contended(attempt, sleep=lambda s: None)
     assert calls == [1]
+
+
+def test_a_match_that_lost_every_lock_race_reports_false_once_the_winner_has_committed():
+    from decimal import Decimal
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    from reconciliation_service.models.records import BankLine, OpenItem
+    from reconciliation_service.services import repository_firestore as module
+    from reconciliation_service.services.repository_firestore import FirestoreReconRepository
+
+    taken = MagicMock(exists=True)
+    taken.to_dict.return_value = {"status": "MATCHED", "version": 1}
+    client = MagicMock()
+    client.collection.return_value.document.return_value.get.return_value = taken
+    repo = FirestoreReconRepository.__new__(FirestoreReconRepository)
+    repo.client, repo._open, repo._lines = client, client.collection(), client.collection()
+    item = OpenItem(settlement_id="s1", account="A", amount=Decimal("1.00"), currency="EUR",
+                    settled_at=datetime(2026, 11, 2, tzinfo=timezone.utc), version=0)
+    line = BankLine(line_id="L", bank_txn_id="T", value_date="2026-11-02", amount=Decimal("1.00"), currency="EUR",
+                    counterparty_account="A", reference=None)
+    original = module._contended
+    module._contended = lambda attempt, **kw: (_ for _ in ()).throw(ValueError("Failed to commit transaction in 5 attempts."))
+    try:
+        assert repo.match("acme", line, [item], "EXACT") is False
+    finally:
+        module._contended = original
