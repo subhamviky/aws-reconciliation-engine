@@ -6,6 +6,7 @@ when that exceeds the write-off limit only the deterministic rules know. That is
 exactly the case the confirmation step must catch.
 """
 import json
+import os
 import re
 from decimal import Decimal
 
@@ -32,5 +33,11 @@ def _propose(messages, ctx) -> str:
                        "rationale": "No open item explains the amount; ask the payer for remittance advice."})
 
 
-def build_triage_llm() -> SimulatedLLMService:
+def build_triage_llm(profile: str = None):
+    """The simulated model, or (GCP-01) the model of the E2A provider profile the deployment names
+    in E2A_PROVIDER_PROFILE, e.g. gemini_api (the `gemini` extra). The agent and its checks are the same."""
+    profile = (profile if profile is not None else os.getenv("E2A_PROVIDER_PROFILE", "")).strip()
+    if profile and profile != "simulated":
+        from e2a_managed import bindings_from_profile
+        return bindings_from_profile(profile).llm_service
     return SimulatedLLMService().add_rule("triage:propose", system_contains(AGENT_MARKER), _propose)

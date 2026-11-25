@@ -94,3 +94,21 @@ run "paid_models_refused" {
 
   expect_failures = [var.llm_profile]
 }
+
+run "callers_are_who_cloud_run_verified" {
+  command = plan
+
+  variables {
+    identity_subject_roles = { "genai-app@demo-project.iam.gserviceaccount.com" = ["tenant:acme", "reconciliation.read"] }
+  }
+
+  assert {
+    condition = alltrue([for want in [
+      "E2A_IDENTITY_SOURCE=gcp_cloud_run",
+      "E2A_IDENTITY_TRUSTED_ISSUERS=[\"https://accounts.google.com\"]",
+      "E2A_WORKLOAD_IDENTITY=gcp_id_token",
+      "E2A_IDENTITY_SUBJECT_ROLES={\"genai-app@demo-project.iam.gserviceaccount.com\":[\"tenant:acme\",\"reconciliation.read\"]}",
+    ] : contains([for e in google_cloud_run_v2_service.app.template[0].containers[0].env : "${e.name}=${e.value != null ? e.value : ""}"], want)])
+    error_message = "Cloud Run IAM's ID token is the identity; calls to settlement carry this service's own."
+  }
+}

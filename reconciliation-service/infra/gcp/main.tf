@@ -29,6 +29,14 @@ locals {
   labels       = { app = "reconciliation-service", landscape = "finance-ai", managed-by = "terraform" }
   lines        = "recon-bank-lines"
   pubsub_agent = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-pubsub.iam.gserviceaccount.com"
+  # GCP-01, E2A v1.11.0: Cloud Run IAM verifies every caller's Google ID token; the deployment grants
+  # each caller (email) this tenant and its roles. Calls to settlement carry this service's ID token.
+  identity_env = {
+    E2A_IDENTITY_SOURCE          = "gcp_cloud_run"
+    E2A_IDENTITY_TRUSTED_ISSUERS = jsonencode(["https://accounts.google.com"])
+    E2A_IDENTITY_SUBJECT_ROLES   = jsonencode(var.identity_subject_roles)
+    E2A_WORKLOAD_IDENTITY        = "gcp_id_token"
+  }
   llm_env = merge(
     { E2A_PROVIDER_PROFILE = var.llm_profile },
     var.llm_model_id == "" ? {} : { LLM_MODEL_ID = var.llm_model_id },
@@ -164,7 +172,7 @@ resource "google_cloud_run_v2_service" "app" {
         }
       }
       dynamic "env" {
-        for_each = merge(local.llm_env, {
+        for_each = merge(local.llm_env, local.identity_env, {
           RECON_STATE_BACKEND       = "firestore"
           GOOGLE_CLOUD_PROJECT      = var.project_id
           FIRESTORE_DATABASE        = var.firestore_database

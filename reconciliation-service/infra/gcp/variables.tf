@@ -84,3 +84,9 @@ variable "invoker_members" {
     error_message = "reconciliation-service posts ledger adjustments: it is never public."
   }
 }
+
+variable "identity_subject_roles" {
+  type        = map(list(string))
+  description = "Who may call the API and what they may do (GCP-01, E2A v1.11.0): each caller's email (service account or person) -> roles, this tenant as \"tenant:<id>\", e.g. {\"genai-app@P.iam.gserviceaccount.com\" = [\"tenant:acme\", \"reconciliation.read\"]}. Empty: nobody passes."
+  default     = {}
+}
