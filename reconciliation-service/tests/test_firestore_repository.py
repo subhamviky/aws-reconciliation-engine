@@ -53,11 +53,14 @@ def test_concurrent_matches_of_one_item_have_exactly_one_winner():
 
     def worker(n):
         barrier.wait()
-        results[n] = repo.match(TENANT, line(f"L{n}", "100.00"), [item("S1")], "EXACT")
+        try:
+            results[n] = repo.match(TENANT, line(f"L{n}", "100.00"), [item("S1")], "EXACT")
+        except Exception as e:                                # shown in the assertion, not lost in a thread
+            results[n] = e
     threads = [threading.Thread(target=worker, args=(n,)) for n in range(8)]
     [t.start() for t in threads]
     [t.join() for t in threads]
-    assert results.count(True) == 1
+    assert results.count(True) == 1 and results.count(False) == 7, results
     winner = results.index(True)
     assert repo.get_open_item(TENANT, ACCOUNT, sid("S1")).version == 1
     assert [n for n in range(8) if repo.get_line(TENANT, f"L{n}")["status"] == "MATCHED"] == [winner]

@@ -7,6 +7,11 @@ OPEN at the version the caller saw and the line is still RECEIVED or EXCEPTION; 
 returns False and writes nothing. Firestore retries a transaction that lost a race; the retry
 reads the winner's state and returns False, so an item is never matched twice.
 
+Under heavy contention every contender can exhaust the client's attempts (it retries at once,
+with no pause), and then nobody wins. _contended() runs the transaction again with a jittered,
+growing pause, a bounded number of times: a transaction that failed to commit wrote nothing, so
+running it again is safe; the last failure is raised (the message is redelivered).
+
 Collections (one free database is shared by the landscape, so each takes a prefix):
   <prefix>_open        <tenant>#<account>#<settlement_id>   open item (expected cash)
   <prefix>_lines       <tenant>#<line_id>                   bank statement line
@@ -15,11 +20,30 @@ Collections (one free database is shared by the landscape, so each takes a prefi
 Ids are percent-encoded (a Firestore id cannot contain "/").
 """
 import json
+import random
+import time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from ..models.records import BankLine, ExceptionCase, OpenItem
+
+
+CONTENDED_ROUNDS = 8
+
+
+def _contended(attempt, rounds: int = CONTENDED_ROUNDS, sleep=time.sleep):
+    """Run attempt() again after a jittered pause when its transaction could not commit."""
+    from google.api_core.exceptions import Aborted, Conflict
+    for n in range(rounds):
+        try:
+            return attempt()
+        except (Aborted, Conflict, ValueError) as e:
+            if isinstance(e, ValueError) and "commit" not in str(e).lower():
+                raise                                         # not a lost race: a real error
+            if n == rounds - 1:
+                raise
+            sleep(random.uniform(0.0, min(1.0, 0.025 * (2 ** n))))
 
 
 def _id(*parts: str) -> str:
@@ -102,7 +126,7 @@ class FirestoreReconRepository:
                                           "write_off": str(write_off)})
             return True
 
-        return run(self.client.transaction())
+        return _contended(lambda: run(self.client.transaction()))
 
     # ------------------------------------------------------------ exceptions
     def put_exception(self, tenant: str, case: ExceptionCase) -> None:
@@ -133,7 +157,7 @@ class FirestoreReconRepository:
             transaction.set(ref, {"tenant": tenant, "position": new})
             return True
 
-        return run(self.client.transaction())
+        return _contended(lambda: run(self.client.transaction()))
 
     # --------------------------------------------------------------- helpers
     @staticmethod
