@@ -240,6 +240,22 @@ The timings fit together:
 
 A managed provider replaces it by profile: the factory is the swap point, and the agent reaches the model only through `config['llm_service']`. No code changes. The managed providers' design documents describe what each provider adds or changes.
 
+### 5.8 Deployment on Google Cloud, free tier (status: verified, 25 November 2026)
+
+Reconciliation also runs in the Google Cloud trial project of the GenAI landscape (hub design note GCP-01), selected by `infra/gcp` and the service's Firestore repository; AWS remains the reference deployment above. Billing for 1 to 25 November was ₹0.00 of ₹28,569.00.
+
+| Resource (`reconciliation-service/infra/gcp`) | Purpose |
+|---|---|
+| Cloud Run service, 1 vCPU, scaled to zero, CPU only during requests, never public | the API and the push endpoint |
+| Firestore (the project's one free `(default)` database; the service's collections) | lines, exceptions, claims and the lease, through `FirestoreReconRepository` (a match is one transaction) |
+| Pub/Sub topic `recon-bank-lines`, push subscription (its own invoker account), dead-letter topic and subscription | bank lines arrive as messages; `PubSubPushDelivery` (E2A v1.10.0) feeds `IdempotentConsumer`, so Cloud Run needs no always-on worker |
+| Cloud Scheduler job `recon-scheduled` | the scheduled run, including a pull of the dead-letter subscription: only what never took effect is replayed |
+| Service accounts `recon-app`, `recon-push`, `recon-scheduler` | runtime (`datastore.user`, publisher on its topics), the push invoker, the scheduler invoker |
+
+Callers are Google service accounts checked by Cloud Run IAM and mapped to grants by E2A (`gcp_cloud_run`): the GenAI assistant and O2C read (`reconciliation.read`, the routes `GET /service/v1/exceptions` and `GET /service/v1/lines/{line_id}`); reconciliation itself calls settlement-service with its own Google ID token (`settlement.adjust`, `settlement.read`).
+
+What the cloud run confirmed: a statement of two lines posted to `POST /api/v1/statements` answered `QUEUED` for both (they cross Pub/Sub), and a moment later one line was `MATCHED` to its settlement by reference and the 2.50 EUR short line was an `EXCEPTION` with the closest open item as a candidate; the assistant read both through the service routes; a bank line submitted again on a later run was identified as a duplicate of the earlier line (same amount, currency, value date and account, no reference), exactly as `payment_keys` defines it. Findings the real cloud added: the first live statement showed that a statement is asynchronous in the cloud (callers must poll the line, which the service route now allows); a lost race on a Firestore claim returns "not ours" instead of raising (fixed earlier, with the emulator test).
+
 ## 6. Data Design
 
 ![Figure 4 — The DynamoDB table](images/09_data_model.png)
@@ -457,6 +473,7 @@ All `/api/v1` routes depend on `require_identity`: 401 or 403 when identity is c
 | CI `reconciliation-service` | The tests, and E2A's conformance check in strict mode |
 | CI `contract-drift` | The vendored settlement contract equals the producer's `main` |
 | CI `terraform` | `fmt`, `validate`, `terraform test` with a mock provider |
+| Google Cloud scenario (25 November 2026) | `landscape-gcp` against the deployed services: a statement of two lines decided asynchronously (one matched, one exception), read by the assistant, a write-off posted once to settlement; passed in about 125 s in all (report in the assistant repository, `docs/EVALUATION_REPORT.md`) |
 | CI `terraform-apply-moto` | `terraform apply` to a local moto server, then the real handler reconciles a line through the created queue and table, then `destroy` |
 | e2a-managed-providers CI, project-suites | This suite on every managed-provider profile (the model swapped) |
 
@@ -472,6 +489,7 @@ Acceptance criteria AC-1 to AC-18 of the requirements each map to a named test o
 | G-4 | A Secrets Manager secret is provisioned and `SECRET_ARN` set, but no secret is read | Note | G-3 needed no secret; remove it, or keep it for a future credential |
 | G-6 | O2C's exception query used the user route, which a deployment with `jwt_issuer` refuses without a user token | Fixed (SI-01) | The service routes `/service/v1/exceptions` and `/service/v1/lines/{line_id}` (the latter added for the GenAI assistant, GCP-01) |
 | G-5 | `duplicate_of` reads every line of the tenant for each new line | Scale limit | Index payment keys (for example a key item per bank transaction id) for large volumes |
+| G-7 | On Google Cloud a statement answers `QUEUED` and the outcome is read from the line afterwards | Note | A caller that needs the result polls `GET /service/v1/lines/{line_id}` (the scenario does, for up to two minutes) |
 | D-1 | BR-7 names DSA `KNAPSACK_01` + `SUBSETS` with a 1,000 enumeration limit; the code uses `SUBSET_SUM` with `max_nodes` 10,000 | Deviation | DSA v0.3 provides the combined operation with an explicit `complete` flag |
 | D-2 | Requirements list ledger posting and authentication as out of scope | Done since | Implemented (Sections 8.1, 5.6) |
 | D-3 | One tenant per deployment | Design choice | Multi-tenant would need a tenant per message and per route |
