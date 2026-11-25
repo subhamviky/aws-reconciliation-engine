@@ -38,6 +38,8 @@ The same service runs on Google Cloud next to AWS; the cloud is chosen by config
 | Schedule | EventBridge → Lambda | Cloud Scheduler → `POST /jobs/scheduled` |
 | Compute | Lambda | Cloud Run, scale to zero, one instance |
 
+On Cloud Run, IAM verifies every caller's Google ID token and the service reads it (`E2A_IDENTITY_SOURCE=gcp_cloud_run`, E2A v1.11.0): the deployment grants each caller, person or service, the tenant and its roles (`identity_subject_roles` in `infra/gcp`), and calls to settlement-service carry this service's own ID token. The triage agent's model follows `E2A_PROVIDER_PROFILE`: the simulated model by default, or Gemini through the Gemini Developer API's free tier (`gemini_api`; the image built with `--build-arg POETRY_EXTRAS=gemini`).
+
 `RECON_STATE_BACKEND=firestore` selects Firestore; `PUBSUB_LINES_TOPIC` and `GOOGLE_CLOUD_PROJECT` select Pub/Sub. The values for a deployment are placeholders in [`deploy/gcp/binding.vars`](deploy/gcp/binding.vars) until the cloud account exists. CI runs every test a second time on the Firestore emulator and plans `infra/gcp` against a mock provider.
 
 ## The project
