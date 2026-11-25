@@ -62,3 +62,14 @@ service_router = APIRouter(prefix="/service/v1")
                     dependencies=[Depends(service_identity("reconciliation.read"))])
 def list_exceptions_for_services(request: Request, status: Optional[str] = None) -> List[ExceptionCase]:
     return request.app.state.recon_service.exceptions(status)
+
+
+@service_router.get("/lines/{line_id}", dependencies=[Depends(service_identity("reconciliation.read"))])
+def get_line_for_services(line_id: str, request: Request) -> dict:
+    """One bank line (its amount, counterparty and status), for the services that explain an exception:
+    the exception names the line, the line says what was paid (hub design note GCP-01)."""
+    service = request.app.state.recon_service
+    line = service.repo.get_line(service.tenant, line_id)
+    if line is None:
+        raise HTTPException(status_code=404, detail="unknown line")
+    return line

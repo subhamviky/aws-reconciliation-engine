@@ -470,7 +470,7 @@ Acceptance criteria AC-1 to AC-18 of the requirements each map to a named test o
 | G-2 | `settings.load_settings()` is declared and tested but `main.py` reads the environment directly, with its own defaults | Gap | `TABLE_NAME` is declared required, yet the code defaults it to `reconciliation` |
 | G-3 | Calls to settlement-service carried `X-Tenant-Id` only, without a service credential | Fixed (SI-01) | An Entra token from the role's STS web identity token, no secret (Section 5.6). Not yet run against live clouds. |
 | G-4 | A Secrets Manager secret is provisioned and `SECRET_ARN` set, but no secret is read | Note | G-3 needed no secret; remove it, or keep it for a future credential |
-| G-6 | O2C's exception query used the user route, which a deployment with `jwt_issuer` refuses without a user token | Fixed (SI-01) | The service route `/service/v1/exceptions` |
+| G-6 | O2C's exception query used the user route, which a deployment with `jwt_issuer` refuses without a user token | Fixed (SI-01) | The service routes `/service/v1/exceptions` and `/service/v1/lines/{line_id}` (the latter added for the GenAI assistant, GCP-01) |
 | G-5 | `duplicate_of` reads every line of the tenant for each new line | Scale limit | Index payment keys (for example a key item per bank transaction id) for large volumes |
 | D-1 | BR-7 names DSA `KNAPSACK_01` + `SUBSETS` with a 1,000 enumeration limit; the code uses `SUBSET_SUM` with `max_nodes` 10,000 | Deviation | DSA v0.3 provides the combined operation with an explicit `complete` flag |
 | D-2 | Requirements list ledger posting and authentication as out of scope | Done since | Implemented (Sections 8.1, 5.6) |

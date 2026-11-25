@@ -110,7 +110,7 @@ run "service_callers_have_their_own_route_and_authorizer" {
     service_jwt_audience = ["reconciliation-app"]
   }
   assert {
-    condition     = aws_apigatewayv2_route.service_exceptions[0].route_key == "GET /service/v1/exceptions" && aws_apigatewayv2_route.service_exceptions[0].authorization_type == "JWT"
+    condition     = aws_apigatewayv2_route.service_exceptions[0].route_key == "GET /service/v1/exceptions" && aws_apigatewayv2_route.service_exceptions[0].authorization_type == "JWT" && aws_apigatewayv2_route.service_lines[0].authorization_type == "JWT"
     error_message = "The service route requires a token"
   }
   assert {
@@ -130,7 +130,7 @@ run "no_unverified_service_route_when_users_are_verified" {
     jwt_audience = ["client"]
   }
   assert {
-    condition     = length(aws_apigatewayv2_route.service_exceptions) == 0
+    condition     = length(aws_apigatewayv2_route.service_exceptions) == 0 && length(aws_apigatewayv2_route.service_lines) == 0
     error_message = "Without a service issuer, a deployment that verifies users must not expose an open service route"
   }
 }

@@ -53,6 +53,23 @@ def test_a_granted_service_reads_open_exceptions(services_on):
     assert response["statusCode"] == 200 and json.loads(response["body"]) == []
 
 
+def test_a_granted_service_reads_one_bank_line(services_on):
+    from decimal import Decimal
+    from datetime import date
+    from reconciliation_service.models.records import BankLine
+    services_on.repo.add_line(services_on.tenant, BankLine(
+        line_id="L-77", bank_txn_id="T-77", value_date=date(2026, 11, 2), amount=Decimal("357.50"), currency="EUR",
+        counterparty_account="ACC-3000", reference=None))
+    ok = lambda_entry.handler(http_event("/service/v1/lines/L-77", service("reconciliation.read", "tenant:acme"),
+                                         tenant="acme"), None)
+    assert ok["statusCode"] == 200 and json.loads(ok["body"])["amount"] == "357.50"
+    missing = lambda_entry.handler(http_event("/service/v1/lines/NOPE", service("reconciliation.read", "tenant:acme"),
+                                              tenant="acme"), None)
+    assert missing["statusCode"] == 404
+    assert status(http_event("/service/v1/lines/L-77", service("tenant:acme"), "acme")) == 403     # no read role
+    assert status(http_event("/service/v1/lines/L-77", tenant="acme")) == 401                       # no claims
+
+
 def test_without_claims_401_and_without_grants_403(services_on):
     assert status(http_event("/service/v1/exceptions", tenant="acme")) == 401
     assert status(http_event("/service/v1/exceptions", service("reconciliation.read", "tenant:globex"), "acme")) == 403

@@ -82,6 +82,16 @@ resource "aws_apigatewayv2_route" "service_exceptions" {
   authorizer_id      = local.service_identity_on ? aws_apigatewayv2_authorizer.service[0].id : null
 }
 
+# one bank line, for the services that explain an exception (hub design note GCP-01): the same authorizer
+resource "aws_apigatewayv2_route" "service_lines" {
+  count              = local.service_route_on ? 1 : 0
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "GET /service/v1/lines/{line_id}"
+  target             = "integrations/${aws_apigatewayv2_integration.app.id}"
+  authorization_type = local.service_identity_on ? "JWT" : "NONE"
+  authorizer_id      = local.service_identity_on ? aws_apigatewayv2_authorizer.service[0].id : null
+}
+
 data "aws_iam_policy_document" "workload" {
   statement {
     sid       = "OwnWebIdentityToken"
