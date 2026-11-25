@@ -26,6 +26,33 @@ jobs:
       - name: E2A conformance, strict (v1.3 makes R2 an error; design note V13-01)
         run: poetry run python -m e2a.conformance --strict src
 
+  reconciliation-service-gcp:
+    # GCP-01: the same suite with the service's state in Firestore (the emulator), and the
+    # Firestore repository's own guarantees (one transaction per match, one winner under a race).
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reconciliation-service
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Start the Firestore emulator
+        working-directory: .
+        run: |
+          docker run -d --name firestore -p 8085:8085 gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators \
+            gcloud emulators firestore start --host-port=0.0.0.0:8085
+          for _ in $(seq 90); do curl -s -o /dev/null http://127.0.0.1:8085/ && break; sleep 2; done
+      - run: pipx install "poetry>=2.0,<3"
+      - run: poetry install --no-interaction
+      - name: Every test on Firestore (RECON_STATE_BACKEND=firestore)
+        env:
+          RECON_STATE_BACKEND: firestore
+          FIRESTORE_EMULATOR_HOST: 127.0.0.1:8085
+          GOOGLE_CLOUD_PROJECT: demo-recon
+        run: poetry run pytest -q -rs
+
   contract-drift:
     runs-on: ubuntu-latest
     steps:
@@ -43,16 +70,20 @@ jobs:
 
   terraform:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [infra, infra/gcp]          # AWS, and Google Cloud (GCP-01)
     defaults:
       run:
-        working-directory: reconciliation-service/infra
+        working-directory: reconciliation-service/${{ matrix.stack }}
     steps:
       - uses: actions/checkout@v6
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.17.1"
           terraform_wrapper: false
-      - name: fmt, validate and test against the mock provider (no AWS account)
+      - name: fmt, validate and test against the mock provider (no cloud account)
         run: |
           terraform init -backend=false -input=false
           terraform fmt -check -recursive

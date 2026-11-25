@@ -16,7 +16,6 @@ from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
 from e2a import BaseDistributedLock, BaseIdempotencyStore, InMemoryBroker
-from e2a_adapters.aws import DynamoDBIdempotencyStore, DynamoDBLease
 from e2a_simulated_llm import SimulatedLLMService
 
 from ..agents.exception_triage_agent import ExceptionTriageAgent
@@ -65,8 +64,8 @@ class ReconciliationService:
                  lease: Optional[BaseDistributedLock] = None) -> None:
         self.repo, self.feed, self.llm, self.tenant = repo, feed, llm, tenant_id
         # E2A's ports, by default on the service's own DynamoDB table (items under E2A#... partitions)
-        self.claims = claims or DynamoDBIdempotencyStore(repo.table)
-        self.lease = lease or DynamoDBLease(repo.table)
+        self.claims = claims or repo.idempotency_store()      # DynamoDB or Firestore, by the repository
+        self.lease = lease or repo.lease_store()
         self.ledger = ledger                     # None: adjustments are not posted (tests, local runs)
         self.matcher = matcher or Matcher()
         self.write_off_limit = write_off_limit

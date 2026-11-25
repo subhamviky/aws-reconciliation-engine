@@ -26,6 +26,20 @@ This repository went through three stages. Each one is kept, so the path can be 
 | Not part of the spike | Accepted write-offs and refunds are posted to the settlement ledger exactly once (idempotency key per bank line, retried while pending) | E2A typed outcomes; settlement adjustments API |
 | Deployed to one AWS region (ap-south-1) | Terraform tested with a mock provider and **applied to a local moto server in CI**, then smoke-tested through the real Lambda handler | A2C-generated AWS landing zone |
 
+## Google Cloud (free tier) — hub design note GCP-01
+
+The same service runs on Google Cloud next to AWS; the cloud is chosen by configuration, not code:
+
+| | AWS (`reconciliation-service/infra`) | Google Cloud (`reconciliation-service/infra/gcp`) |
+|---|---|---|
+| State | DynamoDB (`ReconRepository`) | Firestore (`FirestoreReconRepository`): the same operations, one transaction per match |
+| E2A claims and lease | DynamoDB | Firestore (`recon_e2a`) |
+| Bank lines | SQS → Lambda (`SQSLambdaBatch`) | Pub/Sub push → `POST /pubsub/bank-lines` (`PubSubPushDelivery`, E2A v1.10.0) |
+| Schedule | EventBridge → Lambda | Cloud Scheduler → `POST /jobs/scheduled` |
+| Compute | Lambda | Cloud Run, scale to zero, one instance |
+
+`RECON_STATE_BACKEND=firestore` selects Firestore; `PUBSUB_LINES_TOPIC` and `GOOGLE_CLOUD_PROJECT` select Pub/Sub. The values for a deployment are placeholders in [`deploy/gcp/binding.vars`](deploy/gcp/binding.vars) until the cloud account exists. CI runs every test a second time on the Firestore emulator and plans `infra/gcp` against a mock provider.
+
 ## The project
 
 | Service | Stack | Role |

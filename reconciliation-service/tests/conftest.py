@@ -66,8 +66,24 @@ def feed():
     return FakeFeed()
 
 
+def firestore_repository():
+    """GCP-01: a Firestore repository on the emulator, in collections of its own (one per test)."""
+    import os
+    from google.cloud import firestore
+    from reconciliation_service.services.repository_firestore import FirestoreReconRepository
+    client = firestore.Client(project=os.getenv("GOOGLE_CLOUD_PROJECT", "demo-recon"))
+    return FirestoreReconRepository(client, prefix=f"t{uuid.uuid4().hex[:10]}")
+
+
 @pytest.fixture
 def service(table, feed):
+    """RECON_STATE_BACKEND=firestore (with FIRESTORE_EMULATOR_HOST) runs every service-level test
+    on Firestore instead of DynamoDB: the second pass of the CI (GCP-01)."""
+    import os
+    if os.getenv("RECON_STATE_BACKEND", "dynamodb") == "firestore":
+        if not os.getenv("FIRESTORE_EMULATOR_HOST"):
+            pytest.skip("RECON_STATE_BACKEND=firestore needs FIRESTORE_EMULATOR_HOST")
+        return ReconciliationService(firestore_repository(), feed, build_triage_llm(), TENANT)
     return ReconciliationService(ReconRepository(table), feed, build_triage_llm(), TENANT)
 
 

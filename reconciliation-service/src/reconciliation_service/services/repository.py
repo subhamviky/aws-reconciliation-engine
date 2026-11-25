@@ -33,9 +33,22 @@ def _conditional_failure(error: ClientError) -> bool:
 
 
 class ReconRepository:
+    """The DynamoDB repository. repository_firestore.FirestoreReconRepository has the same
+    operations and guarantees on Firestore (hub design note GCP-01); the service takes either."""
+    backend = "dynamodb"
+
     def __init__(self, table) -> None:
         self.table = table                              # boto3 DynamoDB Table resource
         self.client = table.meta.client                 # the resource's client: plain Python values
+
+    # E2A claims and the ledger-retry lease live in the service table (E2A partitions)
+    def idempotency_store(self, **kwargs):
+        from e2a_adapters.aws import DynamoDBIdempotencyStore
+        return DynamoDBIdempotencyStore(self.table, **kwargs)
+
+    def lease_store(self, **kwargs):
+        from e2a_adapters.aws import DynamoDBLease
+        return DynamoDBLease(self.table, **kwargs)
 
     # ------------------------------------------------------------ open items
     def add_open_item(self, tenant: str, item: OpenItem) -> bool:
