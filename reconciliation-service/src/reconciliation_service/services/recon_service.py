@@ -30,6 +30,10 @@ class ProposalRejected(Exception):
     """The rules refuse the proposal against the current state (HTTP 422)."""
 
 
+class LedgerUnavailable(Exception):
+    """The settlement ledger cannot confirm right now; the caller may retry."""
+
+
 class ConcurrentChange(Exception):
     """An item changed between validation and execution (HTTP 409)."""
 
@@ -227,6 +231,39 @@ class ReconciliationService:
         self._post_to_ledger(case)
         return {"line_id": line_id, "status": case.status, "resolution": case.resolution,
                 "ledger_status": case.ledger_status, "ledger_detail": case.ledger_detail}
+
+    def resolve_with_adjustment(self, line_id: str, settlement_id: str, adjustment_id: str) -> Dict:
+        """Close an exception because another system (the GenAI assistant, after a second person's approval) posted
+        the adjustment itself. Nothing is taken on the caller's word: the settlement ledger is read, and the exception
+        closes only if it shows that adjustment, on that settlement, referencing this bank line. Idempotent: closing
+        it again with the same adjustment answers the same; another adjustment is refused."""
+        case = self.repo.get_exception(self.tenant, line_id)
+        if case is None:
+            raise ProposalRejected("no exception for this line")
+        if case.status == "RESOLVED":
+            if case.ledger_adjustment_id == adjustment_id:
+                return self._resolution(case, replayed=True)
+            raise ProposalRejected("the exception is already resolved by another adjustment")
+        if not self.ledger or not hasattr(self.ledger, "adjustments"):
+            raise LedgerUnavailable("no ledger is configured to verify the adjustment")
+        rows = self.ledger.adjustments(self.tenant, settlement_id)
+        if rows is None:
+            raise LedgerUnavailable("the settlement ledger could not be read; try again")
+        row = next((r for r in rows if str(r.get("adjustmentId")) == str(adjustment_id)), None)
+        if row is None or line_id not in str(row.get("reference") or ""):
+            raise ProposalRejected("the ledger shows no such adjustment for this bank line")
+        case.status = "RESOLVED"
+        case.resolution = f"{row.get('type')} {row.get('amount')} posted to the ledger (adjustment {adjustment_id})"
+        case.ledger_status, case.ledger_adjustment_id = "POSTED", str(adjustment_id)
+        case.ledger_detail = f"verified in the ledger: {row.get('type')} {row.get('amount')}"
+        self.repo.put_exception(self.tenant, case)
+        self.repo.set_line_status(self.tenant, line_id, "ADJUSTED")
+        return self._resolution(case, replayed=False)
+
+    @staticmethod
+    def _resolution(case: ExceptionCase, replayed: bool) -> Dict:
+        return {"line_id": case.line_id, "status": case.status, "resolution": case.resolution,
+                "adjustment_id": case.ledger_adjustment_id, "replayed": replayed}
 
     # ------------------------------------------------------------ the ledger
     def _post_to_ledger(self, case: ExceptionCase) -> None:
