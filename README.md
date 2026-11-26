@@ -4,7 +4,7 @@
 > lines are matched against completed settlements with deterministic, bounded algorithms; what
 > cannot be matched becomes an exception that an AI agent triages and deterministic rules decide.
 
-> **Renamed** from `aws-reconciliation-engine` on 24 November 2026: the engine is cloud-neutral (AWS today; a Google Cloud profile is being added, hub design note GCP-01). The state before the change is tagged `pre-gcp-2026`. Old URLs redirect.
+> **Renamed** from `aws-reconciliation-engine` on 24 November 2026: the engine is cloud-neutral (AWS, and Google Cloud since hub design note GCP-01). The state before the change is tagged `pre-gcp-2026`. Old URLs redirect.
 
 ## From spike to frameworks to project
 
@@ -40,7 +40,7 @@ The same service runs on Google Cloud next to AWS; the cloud is chosen by config
 
 On Cloud Run, IAM verifies every caller's Google ID token and the service reads it (`E2A_IDENTITY_SOURCE=gcp_cloud_run`, E2A v1.11.0): the deployment grants each caller, person or service, the tenant and its roles (`identity_subject_roles` in `infra/gcp`), and calls to settlement-service carry this service's own ID token. The triage agent's model follows `E2A_PROVIDER_PROFILE`: the simulated model by default, or Gemini through the Gemini Developer API's free tier (`gemini_api`; the image built with `--build-arg POETRY_EXTRAS=gemini`).
 
-`RECON_STATE_BACKEND=firestore` selects Firestore; `PUBSUB_LINES_TOPIC` and `GOOGLE_CLOUD_PROJECT` select Pub/Sub. The values for a deployment are placeholders in [`deploy/gcp/binding.vars`](deploy/gcp/binding.vars) until the cloud account exists. CI runs every test a second time on the Firestore emulator and plans `infra/gcp` against a mock provider.
+`RECON_STATE_BACKEND=firestore` selects Firestore; `PUBSUB_LINES_TOPIC` and `GOOGLE_CLOUD_PROJECT` select Pub/Sub. The values in [`deploy/gcp/binding.vars`](deploy/gcp/binding.vars) are placeholders (a deployment's real values are kept outside the repository). **Verified in the cloud on 25 November 2026:** the service ran on Cloud Run in a real free-tier project; a statement of two lines crossed Pub/Sub and was decided asynchronously (one matched, one exception), and the GenAI assistant read both through the service routes; billing stayed at 0.00. CI runs every test a second time on the Firestore emulator and plans `infra/gcp` against a mock provider.
 
 ## The project
 
