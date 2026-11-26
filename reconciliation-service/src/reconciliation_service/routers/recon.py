@@ -3,9 +3,10 @@ requires the identity API Gateway verified when identity at ingress is on (route
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from ..models.records import BankLine, ExceptionCase
-from ..services.recon_service import ConcurrentChange, ProposalRejected
+from ..services.recon_service import ConcurrentChange, LedgerUnavailable, ProposalRejected
 
 from .identity import require_identity, service_identity
 
@@ -62,6 +63,23 @@ service_router = APIRouter(prefix="/service/v1")
                     dependencies=[Depends(service_identity("reconciliation.read"))])
 def list_exceptions_for_services(request: Request, status: Optional[str] = None) -> List[ExceptionCase]:
     return request.app.state.recon_service.exceptions(status)
+
+
+class ResolveBody(BaseModel):
+    settlement_id: str
+    adjustment_id: str
+
+
+@service_router.post("/exceptions/{line_id}/resolve", dependencies=[Depends(service_identity("reconciliation.resolve"))])
+def resolve_for_services(line_id: str, body: ResolveBody, request: Request) -> dict:
+    """Close an exception whose adjustment another system posted after an approval (hub design note GCP-02, A.1): the
+    ledger is read and the exception closes only if it shows that adjustment for this bank line."""
+    try:
+        return request.app.state.recon_service.resolve_with_adjustment(line_id, body.settlement_id, body.adjustment_id)
+    except ProposalRejected as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except LedgerUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @service_router.get("/lines/{line_id}", dependencies=[Depends(service_identity("reconciliation.read"))])

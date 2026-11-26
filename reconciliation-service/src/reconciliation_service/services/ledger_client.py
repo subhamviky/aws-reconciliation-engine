@@ -8,7 +8,7 @@ can never post twice: settlement-service replays the first result. The outcome i
   PENDING  no definitive answer (5xx, timeout, connection): retried later with the same key
 """
 from decimal import Decimal
-from typing import Dict, Protocol
+from typing import Dict, Protocol, List, Optional
 
 import httpx
 
@@ -25,6 +25,8 @@ def ledger_key(tenant_id: str, line_id: str) -> str:
 class SettlementLedger(Protocol):
     def post_adjustment(self, tenant_id: str, request: Dict) -> Dict: ...
 
+    def adjustments(self, tenant_id: str, settlement_id: str) -> Optional[List[Dict]]: ...
+
 
 class HttpSettlementLedger:
     def __init__(self, base_url: str, timeout: float = 5.0, transport=None, credentials=None) -> None:
@@ -32,6 +34,15 @@ class HttpSettlementLedger:
         self._http = httpx.Client(base_url=base_url, timeout=timeout, transport=transport)
         self._breaker = CircuitBreaker(failure_threshold=5, reset_seconds=30.0)
         self._budget = RetryBudget()
+
+    def adjustments(self, tenant_id: str, settlement_id: str) -> Optional[List[Dict]]:
+        """The ledger's adjustments of one settlement, or None when it cannot be read now (not "there are none")."""
+        path = f"/api/v1/settlements/{settlement_id}/adjustments"
+        try:
+            r = self._http.get(path, headers={"X-Tenant-Id": tenant_id, **auth_headers(self._credentials, self._base + path)})
+            return r.json() if r.status_code == 200 and r.content else None
+        except Exception:                                            # transport failure: unknown, not empty
+            return None
 
     def post_adjustment(self, tenant_id: str, request: Dict) -> Dict:
         body = {k: request[k] for k in ("type", "amount", "reason", "reference")}
