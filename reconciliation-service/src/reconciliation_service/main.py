@@ -6,6 +6,7 @@ import boto3
 from e2a_adapters.workload import workload_credentials
 from fastapi import FastAPI
 
+from . import correlation
 from .routers.gcp import router as gcp_router
 from .routers.recon import router as recon_router, service_router
 from .services.llm import build_triage_llm
@@ -49,6 +50,7 @@ def build_service() -> ReconciliationService:
 
 def build_app(service: ReconciliationService) -> FastAPI:
     app = FastAPI(title="reconciliation-service")
+    correlation.install(app, "reconciliation-service")
     app.state.recon_service = service
     queue_url, topic = os.getenv("QUEUE_URL"), os.getenv("PUBSUB_LINES_TOPIC")
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
