@@ -252,13 +252,31 @@ class ReconciliationService:
         row = next((r for r in rows if str(r.get("adjustmentId")) == str(adjustment_id)), None)
         if row is None or line_id not in str(row.get("reference") or ""):
             raise ProposalRejected("the ledger shows no such adjustment for this bank line")
+        consumed = self._consume_open_item(line_id, settlement_id, row)
         case.status = "RESOLVED"
         case.resolution = f"{row.get('type')} {row.get('amount')} posted to the ledger (adjustment {adjustment_id})"
         case.ledger_status, case.ledger_adjustment_id = "POSTED", str(adjustment_id)
         case.ledger_detail = f"verified in the ledger: {row.get('type')} {row.get('amount')}"
         self.repo.put_exception(self.tenant, case)
-        self.repo.set_line_status(self.tenant, line_id, "ADJUSTED")
+        if not consumed:                                          # no open item to match: the line is only adjusted
+            self.repo.set_line_status(self.tenant, line_id, "ADJUSTED")
         return self._resolution(case, replayed=False)
+
+    def _consume_open_item(self, line_id: str, settlement_id: str, row: Dict) -> bool:
+        """The adjusted settlement's open item is matched to the line, as accept() does for its own proposal, so it
+        stops being a candidate for later lines. Without this the item stayed OPEN forever, open items piled up, and a
+        later line was offered the oldest of them instead of its own settlement (found by the cloud scenario).
+        False when there is no open item to consume (unknown to reconciliation, or already matched)."""
+        raw_line = self.repo.get_line(self.tenant, line_id)
+        if raw_line is None:
+            return False
+        line = BankLine.model_validate(raw_line)
+        item = self.repo.get_open_item(self.tenant, line.counterparty_account, settlement_id)
+        if item is None or item.status != "OPEN":
+            return False
+        if not self.repo.match(self.tenant, line, [item], "ADJUSTMENT", Decimal(str(row.get("amount")))):
+            raise ConcurrentChange("the settlement's open item changed; try again")
+        return True
 
     @staticmethod
     def _resolution(case: ExceptionCase, replayed: bool) -> Dict:

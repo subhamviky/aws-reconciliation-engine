@@ -144,7 +144,7 @@ def test_the_exception_closes_when_the_ledger_shows_the_adjustment_for_this_line
     case = service.repo.get_exception(TENANT, "L1")
     assert result["status"] == "RESOLVED" and result["replayed"] is False and result["adjustment_id"] == "adj-9"
     assert case.status == "RESOLVED" and case.ledger_adjustment_id == "adj-9" and "adj-9" in case.resolution
-    assert service.repo.get_line(TENANT, "L1")["status"] == "ADJUSTED"
+    assert service.repo.get_line(TENANT, "L1")["status"] in ("MATCHED", "ADJUSTED")
     assert service.ledger.calls == []                              # reconciliation posted nothing itself
 
 
@@ -178,3 +178,30 @@ def test_an_unknown_line_has_nothing_to_resolve(service, feed):
     service.ledger = LedgerWithRows([_row()])
     with pytest.raises(ProposalRejected, match="no exception"):
         service.resolve_with_adjustment("L-NOPE", sid("S1"), "adj-9")
+
+
+def test_closing_an_exception_consumes_the_settlements_open_item(service, feed):
+    """The open item of the adjusted settlement must stop being a candidate, as it does when reconciliation accepts
+    its own proposal. Found by the cloud scenario: the item stayed OPEN, open items piled up with every run, and the
+    next run's settlement fell outside the candidates reconciliation offers."""
+    service.ledger = LedgerWithRows([_row()])
+    _open_short_line(service, feed)
+    account = service.repo.get_line(TENANT, "L1")["counterparty_account"]
+    assert [i.settlement_id for i in service.repo.open_items(TENANT, account, "EUR")] == [sid("S1")]
+    service.resolve_with_adjustment("L1", sid("S1"), "adj-9")
+    assert service.repo.open_items(TENANT, account, "EUR") == []            # no longer a candidate
+    assert service.repo.get_open_item(TENANT, account, sid("S1")).status == "MATCHED"
+    line = service.repo.get_line(TENANT, "L1")
+    assert line["status"] == "MATCHED" and line["matched_settlements"] == [sid("S1")]
+    assert service.resolve_with_adjustment("L1", sid("S1"), "adj-9")["replayed"] is True     # still idempotent
+
+
+def test_a_second_short_payment_of_the_same_amount_is_not_offered_the_settled_item(service, feed):
+    service.ledger = LedgerWithRows([_row()])
+    _open_short_line(service, feed)
+    service.resolve_with_adjustment("L1", sid("S1"), "adj-9")
+    feed.completed("S2", "250.00")                                          # a later settlement of the same amount
+    service.poll_settlements()
+    service.reconcile(line("L2", "248.00"))                                 # not a duplicate of L1
+    case = service.repo.get_exception(TENANT, "L2")
+    assert [c.settlement_id for c in case.candidates] == [sid("S2")]       # only the unsettled one
