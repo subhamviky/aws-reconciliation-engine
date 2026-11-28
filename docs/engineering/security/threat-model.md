@@ -1,6 +1,6 @@
 # Threat model: reconciliation-service
 
-- **Status:** Reviewed 2026-11-28 · STRIDE · Platform model and residual risks: [assistant repository](https://github.com/subhamviky/enterprise-finance-genai-assistant/blob/main/docs/engineering/security/threat-model.md). Synthetic data only.
+- **Status:** Draft 2026-11-28, awaiting owner review · STRIDE · Platform model and residual risks: [assistant repository](https://github.com/subhamviky/enterprise-finance-genai-assistant/blob/main/docs/engineering/security/threat-model.md). Synthetic data only.
 
 **Assets:** bank lines, open items, exceptions and their proposals, the idempotency claims, the feed cursor, the ledger-retry lease; the ability to close an exception or ask the ledger for an adjustment.
 
